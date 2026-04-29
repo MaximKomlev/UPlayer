@@ -1,4 +1,4 @@
-#🎬 UPlayer — DASH → HLS Streaming Engine for iOS
+#🎬 UPlayer — DASH → HLS Streaming Player for iOS
 
 *UPlayer is a modular streaming pipeline that enables MPEG-DASH playback on iOS by dynamically converting MPD manifests into HLS playlists compatible with AVPlayer.
 
