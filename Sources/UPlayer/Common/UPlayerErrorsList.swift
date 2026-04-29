@@ -27,4 +27,12 @@ class UPlayerErrorsList: AnyObject {
     public static let invalidAssetURL = makeError(errorCode: -9, errorMessage: "Invalid asset URL")
     public static let invalidAsset = makeError(errorCode: -10, errorMessage: "Asset is not playable")
     public static let assetLoadingFailed = makeError(errorCode: -11, errorMessage: "Failed to load asset")
+    public static let aacEncodongFailed1 = makeError(errorCode: -12, errorMessage: "Failed to create PCM input format")
+    public static let aacEncodongFailed2 = makeError(errorCode: -13, errorMessage: "Failed to create AAC output format")
+    public static let aacEncodongFailed3 = makeError(errorCode: -14, errorMessage: "Failed to create AVAudioConverter")
+    public static let aacEncodongFailed4 = makeError(errorCode: -15, errorMessage: "Failed to create PCM buffer")
+    public static let aacEncodongFailed5 = makeError(errorCode: -16, errorMessage: "Missing PCM int16 channel data")
+    public static let aacEncodongFailed6 = makeError(errorCode: -17, errorMessage: "Failed to create compressed buffer")
+    public static let aacEncodongFailed7 = makeError(errorCode: -18, errorMessage: "AAC conversion failed")
+    public static let aacEncodongFailed8 = makeError(errorCode: -19, errorMessage: "Not supported codec")
 }

@@ -12,6 +12,20 @@ import AVFoundation
 
 private let logScope = "[playback]"
 
+public enum UPlayerMediaInterceptorType: Int, CustomStringConvertible {
+    case video
+    case audio
+    
+    public var description: String {
+        switch self {
+        case .video:
+            return "video"
+        case .audio:
+            return "audio"
+        }
+    }
+}
+
 public enum UPlayerPlayerState: Int, CustomStringConvertible {
     case loading
     case playing
@@ -131,7 +145,8 @@ public protocol UPlayerProtocol: AnyObject {
     
     func thumbnail(at time: TimeInterval) -> UIImage?
     
-    func addMediaInterceptor(_ interceptor: UPlayerMediaInterceptorProtocol)
+    func registerMediaInterceptor(_ interceptor: UPlayerMediaInterceptorProtocol, type: UPlayerMediaInterceptorType)
+    func registerAudioTranscoder(_ transcoder: UPlayerAudioTranscoderProtocol, forCodec type: UPlayerSupportedAudioCodecType)
 }
 
 public class UPlayer: UPlayerProtocol {
@@ -154,7 +169,8 @@ public class UPlayer: UPlayerProtocol {
         return queue
     }()
     
-    private var interceptors = [UPlayerMediaInterceptorProtocol]()
+    private var interceptors = [UPlayerMediaInterceptorType: UPlayerMediaInterceptorProtocol]()
+    private let audioTranscoders = UPlayerAudioTranscoderFactory()
     
     // MARK: Constructors/Destructor
     
@@ -302,15 +318,13 @@ public class UPlayer: UPlayerProtocol {
         return nil
     }
     
-    public func addMediaInterceptor(_ interceptor: UPlayerMediaInterceptorProtocol) {
-        if interceptors.contains(where: { listed in
-            return interceptor === listed
-        }) {
-            return
-        }
-        
-        interceptors.append(interceptor)
+    public func registerMediaInterceptor(_ interceptor: UPlayerMediaInterceptorProtocol, type: UPlayerMediaInterceptorType) {
+        interceptors[type] = interceptor
         interceptor.initialize(with: avPlayer)
+    }
+    
+    public func registerAudioTranscoder(_ transcoder: UPlayerAudioTranscoderProtocol, forCodec type: UPlayerSupportedAudioCodecType) {
+        audioTranscoders.registerTranscoder(transcoder, forCodec: type)
     }
     
     // MARK: Helpers
@@ -324,7 +338,7 @@ public class UPlayer: UPlayerProtocol {
                 let item = try await makePlayerItem(from: asset)
                 log("\(logScope) replacing AVPlayerItem", loggingLevel: .debug)
                 avPlayer.replaceCurrentItem(with: item)
-                interceptors.forEach { listed in
+                interceptors.forEach { _, listed in
                     listed.attach(to: item)
                 }
 

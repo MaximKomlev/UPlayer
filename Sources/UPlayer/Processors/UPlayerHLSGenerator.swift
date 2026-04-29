@@ -735,7 +735,7 @@ private extension UPlayerHLSGenerator {
             return true
         }
 
-        guard let codecs = representation.codecs?.lowercased() else {
+        guard let codecs = normalizeMP4ACodec(representation.codecs) else {
             return false
         }
 
@@ -748,6 +748,24 @@ private extension UPlayerHLSGenerator {
         return false
     }
 
+    func normalizeMP4ACodec(_ codec: String?) -> String? {
+        guard let codec = codec?.lowercased() else { return nil }
+
+        let parts = codec.split(separator: ".")
+        guard parts.count == 3,
+              parts[0] == "mp4a",
+              parts[1] == "40" else {
+            return codec
+        }
+
+        // Normalize object type (remove leading zeros)
+        if let objectType = Int(parts[2]) {
+            return "mp4a.40.\(objectType)"
+        }
+
+        return codec
+    }
+    
     func shouldRouteAudioThroughResourceLoader(_ representation: DASHRepresentation) -> Bool {
         let isAudio =
             representation.mimeType?.contains("audio") == true ||

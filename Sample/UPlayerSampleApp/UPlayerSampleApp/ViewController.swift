@@ -75,6 +75,7 @@ class ViewController: UIViewController {
         
         view.setNeedsLayout()
 
+        player.registerAudioTranscoder(UPlayerG711ToAACTranscoder(), forCodec: .g711)
         player.assetProcessorsQueue = UPlayerAssetProcessorsQueue()
         player.delegate = self
 
