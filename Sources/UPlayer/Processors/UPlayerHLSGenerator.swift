@@ -278,10 +278,10 @@ private extension UPlayerHLSGenerator {
 
                     var streamInf = "#EXT-X-STREAM-INF:BANDWIDTH=\(rep.bandwidth)"
 
-                    if let codecs = rep.codecs, !codecs.isEmpty {
+                    if let codecs = hlsAudioCodec(for: rep), !codecs.isEmpty {
                         streamInf += ",CODECS=\"\(codecs)\""
                     }
-
+                    
                     master += streamInf + "\n"
                     master += playlistURL + "\n"
                 }
@@ -318,7 +318,9 @@ private extension UPlayerHLSGenerator {
                 if let videoCodecs = rep.codecs, !videoCodecs.isEmpty {
                     codecsList.append(videoCodecs)
                 }
-                if let audioCodecs = firstAudioRep?.codecs, !audioCodecs.isEmpty {
+                if let audioRep = firstAudioRep,
+                   let audioCodecs = hlsAudioCodec(for: audioRep),
+                   !audioCodecs.isEmpty {
                     codecsList.append(audioCodecs)
                 }
                 if !codecsList.isEmpty {
@@ -521,9 +523,16 @@ private extension UPlayerHLSGenerator {
         media = media.replacingOccurrences(of: "$Bandwidth$", with: "\(representation.bandwidth)")
 
         let base = representation.baseURL ?? adaptation.baseURL ?? period.baseURL ?? manifest.baseURL
-        guard let base else { return media }
+        let resolved = base.flatMap {
+            return URL(string: media, relativeTo: $0)?.absoluteString
+        } ?? media
 
-        return URL(string: media, relativeTo: base)?.absoluteString ?? media
+        if shouldRouteAudioThroughResourceLoader(representation) {
+            return makeTranscodeURL(resolved,
+                                    originalCodec: representation.codecs)
+        }
+
+        return resolved
     }
 
     func buildInitURL(manifest: DASHManifest,
@@ -534,16 +543,21 @@ private extension UPlayerHLSGenerator {
         guard var initialization = template.initialization else {
             return ""
         }
-
+        
         initialization = initialization.replacingOccurrences(of: "$RepresentationID$", with: representation.id)
         initialization = initialization.replacingOccurrences(of: "$Bandwidth$", with: "\(representation.bandwidth)")
-
+        
         let base = representation.baseURL ?? adaptation.baseURL ?? period.baseURL ?? manifest.baseURL
-        guard let base else {
-            return initialization
+        let resolved = base.flatMap {
+            return URL(string: initialization, relativeTo: $0)?.absoluteString
+        } ?? initialization
+        
+        if shouldRouteAudioThroughResourceLoader(representation) {
+            return makeTranscodeURL(resolved,
+                                    originalCodec: representation.codecs)
         }
-
-        return URL(string: initialization, relativeTo: base)?.absoluteString ?? initialization
+        
+        return resolved
     }
 
     func buildRepresentationMediaURL(manifest: DASHManifest,
@@ -713,6 +727,62 @@ private extension UPlayerHLSGenerator {
         return renderLivePlaylist(initURL: state.initURL,
                                   targetDuration: state.targetDuration,
                                   segments: state.segments)
+    }
+    
+    func isAudioAcceptedByAVPlayer(_ representation: DASHRepresentation) -> Bool {
+        guard representation.mimeType?.contains("audio") == true ||
+              representation.codecs?.contains("mp4a") == true else {
+            return true
+        }
+
+        guard let codecs = representation.codecs?.lowercased() else {
+            return false
+        }
+
+        // AVPlayer generally accepts AAC-LC/HE-AAC in fMP4.
+        // Keep this conservative.
+        if codecs == "mp4a.40.2" { return true } // AAC-LC
+        if codecs == "mp4a.40.5" { return true } // HE-AAC
+        if codecs == "mp4a.40.29" { return true } // HE-AACv2
+
+        return false
+    }
+
+    func shouldRouteAudioThroughResourceLoader(_ representation: DASHRepresentation) -> Bool {
+        let isAudio =
+            representation.mimeType?.contains("audio") == true ||
+            representation.codecs?.lowercased().contains("mp4a") == true
+
+        return isAudio && !isAudioAcceptedByAVPlayer(representation)
+    }
+    
+    func makeTranscodeURL(_ url: String,
+                          originalCodec: String?) -> String {
+        guard let sourceURL = URL(string: url),
+              var components = URLComponents(url: sourceURL, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+
+        components.scheme = "uplayer"
+
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "mode", value: "audio-transcode"))
+
+        if let originalCodec, !originalCodec.isEmpty {
+            queryItems.append(URLQueryItem(name: "codec", value: originalCodec))
+        }
+
+        components.queryItems = queryItems
+
+        return components.url?.absoluteString ?? url
+    }
+    
+    func hlsAudioCodec(for representation: DASHRepresentation) -> String? {
+        if shouldRouteAudioThroughResourceLoader(representation) {
+            return "mp4a.40.2" // transcoder outputs AAC-LC
+        }
+
+        return representation.codecs
     }
 }
 

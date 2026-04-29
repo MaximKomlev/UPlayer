@@ -130,6 +130,8 @@ public protocol UPlayerProtocol: AnyObject {
     func seek(_ value: TimeInterval)
     
     func thumbnail(at time: TimeInterval) -> UIImage?
+    
+    func addMediaInterceptor(_ interceptor: UPlayerMediaInterceptorProtocol)
 }
 
 public class UPlayer: UPlayerProtocol {
@@ -151,6 +153,8 @@ public class UPlayer: UPlayerProtocol {
         queue.maxConcurrentOperationCount = 1
         return queue
     }()
+    
+    private var interceptors = [UPlayerMediaInterceptorProtocol]()
     
     // MARK: Constructors/Destructor
     
@@ -238,7 +242,7 @@ public class UPlayer: UPlayerProtocol {
         state = .loading
         
         log("\(logScope) start", loggingLevel: .debug)
-        
+                
         if let asset = try? assetCache?.asset(url: url) {
             log("\(logScope) start from persistent cache", loggingLevel: .debug)
             startPlayback(asset: asset)
@@ -262,6 +266,7 @@ public class UPlayer: UPlayerProtocol {
     
     public func stop() {
         log("\(logScope) stop", loggingLevel: .debug)
+
         refreshTasks.cancelAllOperations()
         asset = nil
         assetProcessorsQueue?.stop()
@@ -297,6 +302,17 @@ public class UPlayer: UPlayerProtocol {
         return nil
     }
     
+    public func addMediaInterceptor(_ interceptor: UPlayerMediaInterceptorProtocol) {
+        if interceptors.contains(where: { listed in
+            return interceptor === listed
+        }) {
+            return
+        }
+        
+        interceptors.append(interceptor)
+        interceptor.initialize(with: avPlayer)
+    }
+    
     // MARK: Helpers
     
     private func startPlayback(asset: UPlayerAssetProtocol) {
@@ -308,6 +324,9 @@ public class UPlayer: UPlayerProtocol {
                 let item = try await makePlayerItem(from: asset)
                 log("\(logScope) replacing AVPlayerItem", loggingLevel: .debug)
                 avPlayer.replaceCurrentItem(with: item)
+                interceptors.forEach { listed in
+                    listed.attach(to: item)
+                }
 
                 if state != .loading && state != .playing {
                     log("\(logScope) started", loggingLevel: .debug)
@@ -436,24 +455,34 @@ extension UPlayer: UPlayerAssetProcessorsQueueDelegate {
 
 extension UPlayer: AVPlayerObserverDelegate {
     func player(_ player: AVPlayer, didChangeState state: UPlayerPlayerState) {
-        self.state = state
+        DispatchQueue.main.async {
+            self.state = state
+        }
     }
     
     func player(_ player: AVPlayer, didChangeCurrentTime currentTime: TimeInterval) {
-        currentPlayingTime = currentTime
+        DispatchQueue.main.async {
+            self.currentPlayingTime = currentTime
+        }
     }
     
     func player(_ player: AVPlayer, didChangeDuration duration: TimeInterval) {
-        asset?.duration = duration
-        delegate?.didEventPlayerChange(source: self, duration: duration)
+        DispatchQueue.main.async {
+            self.asset?.duration = duration
+            self.delegate?.didEventPlayerChange(source: self, duration: duration)
+        }
     }
     
     func player(_ player: AVPlayer, didChangeResolution resolution: CGSize) {
-        asset?.videoRatio = resolution.height / resolution.width
-        delegate?.playerView?.videoResolution = resolution
+        DispatchQueue.main.async {
+            self.asset?.videoRatio = resolution.height / resolution.width
+            self.delegate?.playerView?.videoResolution = resolution
+        }
     }
     
     func player(_ player: AVPlayer, didChangeRate rate: Double) {
-        delegate?.didEventPlayerChange(source: self, rate: rate)
+        DispatchQueue.main.async {
+            self.delegate?.didEventPlayerChange(source: self, rate: rate)
+        }
     }
 }

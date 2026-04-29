@@ -8,37 +8,32 @@
 import Foundation
 import AVFoundation
 
-public protocol UPlayerVideoInterceptorDelegate: NSObjectProtocol {
-    func willRender(pixelBuffer: CVPixelBuffer, on time: CMTime)
-}
-
-public protocol UPlayerInterceptorProtocol: AnyObject {
-    var delegate: UPlayerVideoInterceptorDelegate? { get set }
-    
-    init(player: AVPlayer)
+public protocol UPlayerMediaInterceptorProtocol: AnyObject {
+    func initialize(with player: AVPlayer)
 
     func start()
     func stop()
     func attach(to: AVPlayerItem)
 }
 
-public final class UPlayerVideoInterceptor: NSObject, UPlayerInterceptorProtocol {
+public protocol UPlayerVideoInterceptorDelegate: NSObjectProtocol {
+    func willRender(source: UPlayerMediaInterceptorProtocol, frame: VideoFrameProtocol)
+}
 
-    private let player: AVPlayer
+public final class UPlayerVideoInterceptor: NSObject, UPlayerMediaInterceptorProtocol {
+
+    private var player: AVPlayer?
 
     private var outputs: [AVPlayerItem: AVPlayerItemVideoOutput] = [:]
     private var displayLink: CADisplayLink?
 
-    public required init(player: AVPlayer) {
+    public weak var delegate: UPlayerVideoInterceptorDelegate?
+
+    public func initialize(with player: AVPlayer) {
         self.player = player
-        
-        super.init()
-        
         observeItemChanges()
     }
 
-    public weak var delegate: UPlayerVideoInterceptorDelegate?
-    
     public func start() {
         displayLink = CADisplayLink(
             target: self,
@@ -69,14 +64,16 @@ public final class UPlayerVideoInterceptor: NSObject, UPlayerInterceptorProtocol
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let item = notification.object as? AVPlayerItem else { return }
+            guard let item = notification.object as? AVPlayerItem else {
+                return
+            }
             self?.outputs[item] = nil
         }
     }
     
     @objc private func readFrame() {
         guard
-            let item = player.currentItem,
+            let item = player?.currentItem,
             let output = outputs[item]
         else {
             return
@@ -86,14 +83,21 @@ public final class UPlayerVideoInterceptor: NSObject, UPlayerInterceptorProtocol
         let itemTime = output.itemTime(forHostTime: hostTime)
 
         guard output.hasNewPixelBuffer(forItemTime: itemTime),
-              let buffer = output.copyPixelBuffer(
-                forItemTime: itemTime,
-                itemTimeForDisplay: nil
-              )
+              let buffer = output.copyPixelBuffer(forItemTime: itemTime,
+                                                  itemTimeForDisplay: nil)
         else {
             return
         }
-
-        delegate?.willRender(pixelBuffer: buffer, on: itemTime)
+        
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        
+        let width = CVPixelBufferGetWidth(buffer)
+        let height = CVPixelBufferGetHeight(buffer)
+        
+        let videoFrame = VideoFrame(frame: buffer,
+                                    size: CGSize(width: width, height: height),
+                                    timeStamp: CMTimeGetSeconds(itemTime))
+        delegate?.willRender(source: self, frame: videoFrame)
     }
 }
