@@ -239,7 +239,7 @@ encode PCM → AAC
 output ADTS stream
 
 ## ⚠️ Important Notes
-- 1. ADTS vs fMP4
+1. ADTS vs fMP4
 
 Transcoded audio uses:
 
@@ -250,7 +250,7 @@ So:
 ❌ Do NOT include #EXT-X-MAP
 ✅ Use .aac segments
 
-- 2. Codec Consistency
+2. Codec Consistency
 
 The codec declared in HLS must match transcoder output:
 
@@ -261,7 +261,7 @@ Mismatch causes:
 ❌ no audio
 ❌ playback stalls
 
-- 3. Performance Considerations
+3. Performance Considerations
 
 ** Transcoding is CPU-intensive:
 
@@ -273,7 +273,8 @@ Recommended:
 
 cache transcoded segments
 reuse decoded PCM when possible
-- 4. Live Streams
+
+4. Live Streams
 
 For live DASH:
 
