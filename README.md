@@ -39,7 +39,7 @@ Seamless DASH playback via HLS translation
 
 ## 🏗 Architecture
 
-* Pipeline is built using Combine processors:
+**Pipeline is built using Combine processors:**
 
 URL
  ↓
@@ -55,7 +55,7 @@ UPlayerAVAssetResourceLoader (uplayer://)
  ↓
 AVPlayer
 
-##Each processor implements:
+**Each processor implements:**
 
 ```swift
 protocol UPlayerAssetProcessorProtocol {
