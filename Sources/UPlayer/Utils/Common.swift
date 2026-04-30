@@ -20,26 +20,3 @@ enum DebugClock {
         formatter.string(from: Date())
     }
 }
-
-internal func modifyURLScheme(_ url: URL, newScheme: String = "uplayer") -> URL? {
-    var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    
-    // Replace scheme
-    components?.scheme = newScheme
-    
-    guard let newURL = components?.url else { return nil }
-    
-    // Remove filename
-    return newURL
-}
-
-internal func convertToUPlayerHLSURL(_ url: URL) -> URL? {
-    var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    components?.scheme = "uplayer"
-
-    guard let newURL = components?.url else { return nil }
-
-    return newURL
-        .deletingPathExtension()
-        .appendingPathExtension("m3u8")
-}

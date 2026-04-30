@@ -614,7 +614,9 @@ private extension UPlayerHLSGenerator {
 
         let sorted = mergedByNumber.values.sorted { $0.number < $1.number }
 
-        guard !sorted.isEmpty else { return [] }
+        guard !sorted.isEmpty else {
+            return []
+        }
 
         // Keep the newest maxSegmentCount, but preserve some overlap
         let effectiveCount = maxSegmentCount
@@ -747,24 +749,6 @@ private extension UPlayerHLSGenerator {
 
         return false
     }
-
-    func normalizeMP4ACodec(_ codec: String?) -> String? {
-        guard let codec = codec?.lowercased() else { return nil }
-
-        let parts = codec.split(separator: ".")
-        guard parts.count == 3,
-              parts[0] == "mp4a",
-              parts[1] == "40" else {
-            return codec
-        }
-
-        // Normalize object type (remove leading zeros)
-        if let objectType = Int(parts[2]) {
-            return "mp4a.40.\(objectType)"
-        }
-
-        return codec
-    }
     
     func shouldRouteAudioThroughResourceLoader(_ representation: DASHRepresentation) -> Bool {
         let isAudio =
@@ -803,16 +787,3 @@ private extension UPlayerHLSGenerator {
         return representation.codecs
     }
 }
-
-func mergeLiveHLS(existing: UPlayerAssetHLSDataProtocol?, incoming: UPlayerAssetHLSDataProtocol?) {
-    guard let existing, let incoming else {
-        return
-    }
-
-    existing.master = incoming.master
-
-    for (key, newPlaylist) in incoming.mediaPlaylists {
-        existing.mediaPlaylists[key] = newPlaylist
-    }
-}
-
