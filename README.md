@@ -1,8 +1,8 @@
-#🎬 UPlayer — DASH → HLS Streaming Player for iOS
+# 🎬 UPlayer — DASH → HLS Streaming Player for iOS
 
-*UPlayer is a modular streaming pipeline that enables MPEG-DASH playback on iOS by dynamically converting MPD manifests into HLS playlists compatible with AVPlayer.
+* UPlayer is a modular streaming pipeline that enables MPEG-DASH playback on iOS by dynamically converting MPD manifests into HLS playlists compatible with AVPlayer.
 
-**It supports:
+** It supports:
 
 - ✅ DASH → HLS conversion (SegmentTemplate, SegmentBase, live & VOD)
 - ✅ Custom AVAssetResourceLoader for virtual HLS (uplayer://)
@@ -13,13 +13,13 @@
 - ✅ MP4 fallback (SegmentBase / progressive)
 - ✅ HLS and MP4 playback
 
-##🚀 Features
-###🎥 Playback
+## 🚀 Features
+### 🎥 Playback
 
 Works with AVPlayer
 Seamless DASH playback via HLS translation
 
-##Supports:
+## Supports:
 
 - VOD MPD (static)
 - Live MPD (dynamic)
@@ -37,9 +37,9 @@ Seamless DASH playback via HLS translation
 - Efficient caching (sprite + cropped image)
 - Custom preview rendering for scrub UI
 
-##🏗 Architecture
+## 🏗 Architecture
 
-*Pipeline is built using Combine processors:
+* Pipeline is built using Combine processors:
 
 URL
  ↓
@@ -63,7 +63,7 @@ protocol UPlayerAssetProcessorProtocol {
 }
 ```
 
-##📦 Core Components
+## 📦 Core Components
 🧩 Processors
 Processor                           Purpose
 UPlayerMetadataDownloader           Downloads MPD or detects media type
@@ -72,17 +72,17 @@ UPlayerThumbnailDownloader          Extracts + downloads thumbnail sprites
 UPlayerHLSGenerator                 Generates HLS (SegmentTemplate)
 UPlayerSegmentBaseHLSGenerator      Generates byte-range HLS
 UPlayerMPDToMP4Resolver             Fallback to MP4
-##🎞 Playback Layer
+## 🎞 Playback Layer
 AVPlayer
 AVPlayerItem
 UPlayerAVAssetResourceLoader
 
-**Custom scheme:
+** Custom scheme:
 ```swift
 uplayer://...
 ```
 
-##🧠 Live Controller
+## 🧠 Live Controller
 
 Handles:
 
@@ -90,7 +90,7 @@ Handles:
 - Playlist regeneration
 - Segment merging
 
-##🔌 Usage
+## 🔌 Usage
 1. Create player
 let player = UPlayer()
 2. Optionally assign a delegate (UPlayerDelegate) to monitor playback activity, 
@@ -101,14 +101,14 @@ uPlayer.play(url: URL(string: "https://example.com/manifest.mpd")!)
 4. Stop playback
 uPlayer.stop()
 
-##🖼 Thumbnail Preview Example
+## 🖼 Thumbnail Preview Example
 ```swift
 if let cue = asset.thumbnailMetadata?.cue(for: scrubTime),
    let image = asset.thumbnailMetadata?.image(for: cue) {
     previewImageView.image = image
 }
 ```
-##⚠️ Important Notes
+## ⚠️ Important Notes
 
 AVPlayer Behavior
 AVPlayerViewController does NOT guarantee thumbnail preview
@@ -125,7 +125,7 @@ Short pause → keep refreshing MPD
 Long pause → detach player:
 player.replaceCurrentItem(with: nil)
 
-##🧪 Supported DASH Formats
+## 🧪 Supported DASH Formats
 ✅ SegmentTemplate
 <SegmentTemplate duration="2" media="$Number$.m4s" />
 ✅ SegmentBase
@@ -135,23 +135,23 @@ player.replaceCurrentItem(with: nil)
 ✅ Thumbnail Tracks
 <AdaptationSet mimeType="image/jpeg">
 
-##🛠 Known Limitations
+## 🛠 Known Limitations
 No DRM support (CENC)
 No subtitles yet
 No native AVPlayer thumbnail rendering
 Requires custom UI for scrubbing preview
 
-##📈 Roadmap
+## 📈 Roadmap
  LL-HLS support
  DRM (FairPlay / Widevine mapping)
  Subtitle tracks
  Smart bitrate selection
  Disk cache for thumbnails & segments
 
-##👨‍💻 Author
+## 👨‍💻 Author
 
 Maxim Komleu
 
-##📄 License
+## 📄 License
 
 MIT License
