@@ -217,6 +217,7 @@ ec-3 / pcma / pcmu
 ## 📦 Implementation Components
 
 🔹 HLS Generators
+
 UPlayerHLSGenerator
 UPlayerSegmentBaseHLSGenerator
 
@@ -224,6 +225,7 @@ Responsible for:
 
 detecting unsupported audio
 rewriting URLs to uplayer://
+
 🔹 Resource Loader
 UPlayerAVAssetResourceLoader
 
@@ -233,15 +235,16 @@ intercepting custom scheme
 downloading original media
 invoking transcoder
 returning transformed data
+
 🔹 Transcoder
 UPlayerG711ToAACTranscoder
 UPlayerAACADTSEncoder
 
 Responsibilities:
 
-decode source audio → PCM
-encode PCM → AAC
-output ADTS stream
+- decode source audio → PCM
+- encode PCM → AAC
+- output ADTS stream
 
 ## ⚠️ Important Notes
 
