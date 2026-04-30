@@ -1,8 +1,8 @@
 # 🎬 UPlayer — DASH → HLS Streaming Player for iOS
 
-UPlayer is a modular streaming pipeline that enables MPEG-DASH playback on iOS by dynamically converting MPD manifests into HLS playlists compatible with AVPlayer.
+*UPlayer is a modular streaming pipeline that enables MPEG-DASH playback on iOS by dynamically converting MPD manifests into HLS playlists compatible with AVPlayer.*
 
-**It supports:
+**It supports:**
 
 - ✅ DASH → HLS conversion (SegmentTemplate, SegmentBase, live & VOD)
 - ✅ Custom AVAssetResourceLoader for virtual HLS (uplayer://)
@@ -77,7 +77,7 @@ AVPlayer
 AVPlayerItem
 UPlayerAVAssetResourceLoader
 
-** Custom scheme:
+**Custom scheme:**
 ```swift
 uplayer://...
 ```
@@ -111,8 +111,8 @@ if let cue = asset.thumbnailMetadata?.cue(for: scrubTime),
 ## ⚠️ Important Notes
 
 AVPlayer Behavior
-AVPlayerViewController does NOT guarantee thumbnail preview
-Use custom UI for scrubbing thumbnails
+*AVPlayerViewController does NOT guarantee thumbnail preview
+Use custom UI for scrubbing thumbnails*
 Live Streams
 Must continuously update playlists
 Otherwise you get:
@@ -137,9 +137,9 @@ player.replaceCurrentItem(with: nil)
 
 # 🔊 Audio Transcoding (On-Demand)
 
-* UPlayer supports automatic audio transcoding for DASH streams when the original audio codec is not compatible with AVPlayer.
+*UPlayer supports automatic audio transcoding for DASH streams when the original audio codec is not compatible with AVPlayer.*
 
-* This is critical because iOS AVPlayer supports only a limited set of audio codecs, primarily:
+**This is critical because iOS AVPlayer supports only a limited set of audio codecs, primarily:**
 
 - ✅ mp4a.40.2 (AAC-LC)
 - ✅ mp4a.40.5 (HE-AAC)
@@ -148,7 +148,7 @@ player.replaceCurrentItem(with: nil)
 
 ## When DASH contains unsupported audio, playback will fail or audio will be ignored.
 
-** Examples:
+**Examples:**
 
 - ec-3 (Dolby Digital Plus)
 - ac-3
@@ -157,14 +157,15 @@ player.replaceCurrentItem(with: nil)
 
 ## ⚙️ How UPlayer Handles It
 
-- 1. Detection (HLS Generator)
+**1. Detection (HLS Generator)**
 
 During DASH → HLS conversion:
 
 Audio representations are analyzed
 Codec is normalized (e.g. mp4a.40.02 → mp4a.40.2)
 If unsupported → transcoding is enabled
-- 2. URL Rewriting
+
+**2. URL Rewriting**
 
 Unsupported audio segments are rewritten to a custom scheme:
 
@@ -173,7 +174,8 @@ uplayer://example.com/audio/seg_1.m4s?mode=audio-transcode&codec=ec-3
 This allows interception by:
 
 UPlayerAVAssetResourceLoader
-- 3. Resource Loader Interception
+
+**3. Resource Loader Interception**
 
 When AVPlayer requests the segment:
 
@@ -186,7 +188,9 @@ Downloads original segment
 Extracts audio samples (if needed)
 Transcodes audio → AAC
 Returns data to AVPlayer
-- 4. Transcoding Pipeline
+
+**4. Transcoding Pipeline**
+
 Original segment (m4s/mp4)
  ↓
 (optional) MP4 demux
@@ -200,7 +204,8 @@ Encode → AAC (LC)
 Wrap → ADTS
  ↓
 Return to AVPlayer
-- 5. HLS Master Playlist Adjustment
+
+**5. HLS Master Playlist Adjustment**
 
 When transcoding is enabled:
 
@@ -239,7 +244,8 @@ encode PCM → AAC
 output ADTS stream
 
 ## ⚠️ Important Notes
-1. ADTS vs fMP4
+
+**1. ADTS vs fMP4**
 
 Transcoded audio uses:
 
@@ -250,7 +256,7 @@ So:
 ❌ Do NOT include #EXT-X-MAP
 ✅ Use .aac segments
 
-2. Codec Consistency
+**2. Codec Consistency**
 
 The codec declared in HLS must match transcoder output:
 
@@ -261,7 +267,7 @@ Mismatch causes:
 ❌ no audio
 ❌ playback stalls
 
-3. Performance Considerations
+**3. Performance Considerations**
 
 Transcoding is CPU-intensive:
 
@@ -274,7 +280,7 @@ Recommended:
 cache transcoded segments
 reuse decoded PCM when possible
 
-4. Live Streams
+**4. Live Streams**
 
 For live DASH:
 
