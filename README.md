@@ -263,7 +263,7 @@ Mismatch causes:
 
 3. Performance Considerations
 
-** Transcoding is CPU-intensive:
+Transcoding is CPU-intensive:
 
 happens per segment
 may increase startup latency
