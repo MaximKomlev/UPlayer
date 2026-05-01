@@ -64,14 +64,17 @@ protocol UPlayerAssetProcessorProtocol {
 ```
 
 ## 📦 Core Components
-🧩 Processors
-Processor                           Purpose
-UPlayerMetadataDownloader           Downloads MPD or detects media type
-UPlayerMPDParser                    Parses DASH manifest
-UPlayerThumbnailDownloader          Extracts + downloads thumbnail sprites
-UPlayerHLSGenerator                 Generates HLS (SegmentTemplate)
-UPlayerSegmentBaseHLSGenerator      Generates byte-range HLS
-UPlayerMPDToMP4Resolver             Fallback to MP4
+### 🧩 Processors
+
+|Processor|Purpose|
+| ----------- | ----------- |
+|UPlayerMetadataDownloader|Downloads MPD or detects media type|
+|UPlayerMPDParser|Parses DASH manifest|
+|UPlayerThumbnailDownloader|Extracts + downloads thumbnail sprites|
+|UPlayerHLSGenerator|Generates HLS (SegmentTemplate)|
+|UPlayerSegmentBaseHLSGenerator|Generates byte-range HLS|
+|UPlayerMPDToMP4Resolver|Fallback to MP4|
+
 ## 🎞 Playback Layer
 AVPlayer
 AVPlayerItem
@@ -292,16 +295,19 @@ ensure:
 sliding window HLS playlists
 segment caching
 stable timestamps
-🧪 When Transcoding is Triggered
-Codec   Action
-mp4a.40.2   pass-through
-mp4a.40.5   pass-through
-mp4a.40.29  pass-through
-ec-3    transcode
-ac-3    transcode
-pcma / pcmu transcode
-unknown transcode
-🧠 Summary
+
+## 🧪 When Transcoding is Triggered
+|Codec|Action
+| ----------- | ----------- |
+|mp4a.40.2|pass-through|
+|mp4a.40.5|pass-through|
+|mp4a.40.29|pass-through|
+|ec-3|transcode|
+|ac-3|transcode|
+|pcma / pcmu|transcode|
+|unknown|pass-through|
+
+## 🧠 Summary
 
 UPlayer ensures compatibility by:
 
