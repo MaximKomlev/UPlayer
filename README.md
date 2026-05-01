@@ -194,6 +194,7 @@ Returns data to AVPlayer
 
 **4. Transcoding Pipeline**
 
+```
 Original segment (m4s/mp4)
  ↓
 (optional) MP4 demux
@@ -207,6 +208,7 @@ Encode → AAC (LC)
 Wrap → ADTS
  ↓
 Return to AVPlayer
+```
 
 **5. HLS Master Playlist Adjustment**
 
