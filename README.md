@@ -41,6 +41,7 @@ Seamless DASH playback via HLS translation
 
 **Pipeline is built using Combine processors:**
 
+```
 URL
  ↓
 UPlayerMetadataDownloader
@@ -54,6 +55,7 @@ UPlayerHLSGenerator / UPlayerSegmentBaseHLSGenerator / UPlayerMPDToMP4Resolver (
 UPlayerAVAssetResourceLoader (uplayer://)
  ↓
 AVPlayer
+```
 
 **Each processor implements:**
 
