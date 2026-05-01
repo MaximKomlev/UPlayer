@@ -266,7 +266,7 @@ So:
 
 The codec declared in HLS must match transcoder output:
 
-** mp4a.40.2
+**mp4a.40.2**
 
 Mismatch causes:
 
