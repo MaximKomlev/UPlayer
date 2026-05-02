@@ -173,9 +173,9 @@ If unsupported → transcoding is enabled
 **2. URL Rewriting**
 
 Unsupported audio segments are rewritten to a custom scheme:
-
+```
 uplayer://example.com/audio/seg_1.m4s?mode=audio-transcode&codec=ec-3
-
+```
 This allows interception by:
 
 UPlayerAVAssetResourceLoader
