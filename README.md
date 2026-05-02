@@ -26,12 +26,12 @@ Seamless DASH playback via HLS translation
 - SegmentTemplate (duration / timeline)
 - SegmentBase (SIDX / byte-range)
 - Multi-representation (adaptive bitrate)
-- 🔄 Live Streaming
+- **🔄 Live Streaming**
 - MPD polling (minimumUpdatePeriod)
 - Sliding HLS window generation
 - Live edge control (stay N segments behind)
 - Playlist merge strategy for continuity
-- 🖼 Thumbnail Scrubbing
+- **🖼 Thumbnail Scrubbing**
 - Parses DASH image adaptation sets
 - Supports tiled JPEG sprites
 - Efficient caching (sprite + cropped image)
