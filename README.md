@@ -341,6 +341,113 @@ Requires custom UI for scrubbing preview
  Smart bitrate selection
  Disk cache for thumbnails & segments
 
+# 🎬 Demo (AVPlayerViewController Integration)
+
+UPlayer is designed to work seamlessly with Apple’s native AVPlayerViewController, allowing you to play MPEG-DASH streams as if they were standard HLS.
+
+Below is a minimal example of integrating UPlayer into a UIViewController:
+
+## 📺 Setup Player UI
+
+```swift
+private let playerViewController = AVPlayerViewController()
+
+override func viewDidLoad() {
+    super.viewDidLoad()
+
+    playerViewController.showsPlaybackControls = true
+    playerViewController.allowsPictureInPicturePlayback = true
+    playerViewController.canStartPictureInPictureAutomaticallyFromInline = true
+
+    playerViewController.player = player.avPlayer
+
+    // Optional custom UI overlays
+    playerViewController.contentOverlayView?.addSubview(customScrubber)
+    playerViewController.contentOverlayView?.addSubview(preview)
+
+    addChild(playerViewController)
+    view.addSubview(playerViewController.view)
+    playerViewController.didMove(toParent: self)
+
+    playerViewController.view.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+        playerViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
+        playerViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        playerViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+        playerViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+    ])
+}
+```
+
+## ⚙️ Configure UPlayer Pipeline
+
+```swift
+// Register audio transcoder (example: G711 → AAC)
+player.registerAudioTranscoder(
+    UPlayerG711ToAACTranscoder(),
+    forCodec: .g711
+)
+```
+
+```swift
+// Setup processing pipeline
+player.assetProcessorsQueue = UPlayerAssetProcessorsQueue()
+player.delegate = self
+
+player.assetProcessorsQueue?.add(
+    processor: UPlayerMetadataDownloader(id: "downloadAssetProcessor")
+)
+
+player.assetProcessorsQueue?.add(
+    processor: UPlayerMPDParser(id: "mpdParserAssetProcessor")
+)
+
+player.assetProcessorsQueue?.add(
+    processor: UPlayerThumbnailDownloader(id: "thumbnailDownloaderProcessor")
+)
+
+player.assetProcessorsQueue?.add(
+    processor: UPlayerSegmentBaseHLSGenerator(id: "hlsSegmentBaseAssetProcessor")
+)
+
+player.assetProcessorsQueue?.add(
+    processor: UPlayerMPDToMP4Resolver(id: "MPDToMP4ResolverAssetProcessor")
+)
+
+player.assetProcessorsQueue?.add(
+    processor: UPlayerHLSGenerator(id: "hlsGeneratorAssetProcessor")
+)
+```
+
+## ▶️ Start Playback
+
+```swift
+player.play(url: mpdURL)
+```
+
+**That’s it — UPlayer will:**
+
+- Download and parse the MPD
+- Convert DASH → HLS
+- Handle unsupported audio via transcoding
+- Feed the result into AVPlayer
+
+## ✨ Demo Features
+- Native playback UI via AVPlayerViewController
+- Picture-in-Picture support
+- Custom scrubbing with thumbnail previews
+- Automatic DASH compatibility layer
+- Audio transcoding (e.g., G711 → AAC)
+## 💡 Tip
+
+You can attach custom UI (scrubber, preview thumbnails) using:
+
+```swift
+playerViewController.contentOverlayView
+```
+
+This allows building advanced playback experiences without replacing the native player.
+
 ## 👨‍💻 Author
 
 Maxim Komleu
