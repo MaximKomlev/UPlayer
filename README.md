@@ -97,14 +97,22 @@ Handles:
 
 ## 🔌 Usage
 1. Create player
+```swift
 let player = UPlayer()
+```
 2. Optionally assign a delegate (UPlayerDelegate) to monitor playback activity, 
 and provide a rendering view when using a custom player controller.
+```swift
 player.delegate = self
+```
 3. Play DASH URL
+```swift
 uPlayer.play(url: URL(string: "https://example.com/manifest.mpd")!)
+```
 4. Stop playback
+```swift
 uPlayer.stop()
+```
 
 ## 🖼 Thumbnail Preview Example
 ```swift
