@@ -100,7 +100,7 @@ Handles:
 ```swift
 let player = UPlayer()
 ```
-2. Optionally assign a delegate (UPlayerDelegate) to monitor playback activity, 
+2. Optionally assign a delegate (**UPlayerDelegate**) to monitor playback activity, 
 and provide a rendering view when using a custom player controller.
 ```swift
 player.delegate = self
