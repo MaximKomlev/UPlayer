@@ -448,6 +448,11 @@ playerViewController.contentOverlayView
 
 This allows building advanced playback experiences without replacing the native player.
 
+## 🎬 Demo Video
+
+Watch the full demo here:  
+https://github.com/MaximKomlev/UPlayer/blob/main/Sample/UPlayerSampleApp/UPlayerSampleApp/Demo/ScreenRecording.MP4
+
 ## 👨‍💻 Author
 
 Maxim Komleu
