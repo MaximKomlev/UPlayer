@@ -455,3 +455,7 @@ Maxim Komleu
 ## 📄 License
 
 MIT License
+
+## 🔍 Keywords
+
+MPEG-DASH, HLS, AVPlayer, iOS video player, DASH to HLS, adaptive streaming, Swift media player, video streaming engine, AVFoundation, SegmentTemplate, SegmentBase, SIDX, live streaming, audio transcoding
