@@ -120,7 +120,7 @@ class ViewController: UIViewController {
         [
             // MARK: - Preprocess
 
-            SourceViewControllerModel.Item(title: "Preprocess",
+            SourceViewControllerModel.Item(title: "Preprocessing",
                                            subtitle: "Preprocess five urls simultaneously",
                                            url: URL(string: "https://localhost"),
                                            type: .preprocess),
