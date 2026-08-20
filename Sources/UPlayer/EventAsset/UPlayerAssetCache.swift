@@ -20,6 +20,10 @@ public class UPlayerAssetCache: UPlayerAssetCacheProtocol {
     private var assets: [AnyHashable: UPlayerAssetProtocol] = [:]
     private let lock = NSLock()
     
+    // MARK: Constructors/Destructor
+    
+    public init() {}
+    
     // MARK: UPlayerAssetCacheProtocol
     
     public func addAsset(_ asset: UPlayerAssetProtocol) {

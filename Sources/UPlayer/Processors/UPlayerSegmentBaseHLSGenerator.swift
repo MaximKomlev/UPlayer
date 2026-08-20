@@ -110,6 +110,10 @@ public final class UPlayerSegmentBaseHLSGenerator: UPlayerAssetProcessorProtocol
     public func cancel() {
         isTaskCanceled.set { $0 = true }
     }
+    
+    public func makeProcessor() -> any UPlayerAssetProcessorProtocol {
+        return UPlayerSegmentBaseHLSGenerator(id: id)
+    }
 }
 
 // MARK: - Generation

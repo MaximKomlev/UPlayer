@@ -264,6 +264,10 @@ public final class UPlayerMPDParser: NSObject, UPlayerAssetProcessorProtocol {
         isTaskCanceled.set { $0 = true }
     }
     
+    public func makeProcessor() -> any UPlayerAssetProcessorProtocol {
+        return UPlayerMPDParser(id: id)
+    }
+
     // MARK: Helpers
     
     private func reset() {

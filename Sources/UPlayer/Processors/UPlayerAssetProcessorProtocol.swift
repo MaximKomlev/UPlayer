@@ -10,16 +10,20 @@ import Foundation
 
 private let logScope = "[proccessing queue]"
 
+public typealias UPlayerAssetProcessingID = UUID
+
 public protocol UPlayerAssetProcessorProtocol: AnyObject {
-
+    
     var id: String { get }
-
+    
     init(id: String)
-
+    
     var isRunning: Bool { get }
     
     func process(asset: UPlayerAssetProtocol) -> AnyPublisher<UPlayerAssetProtocol, Error>
     func cancel()
+    
+    func makeProcessor() -> UPlayerAssetProcessorProtocol
 }
 
 public protocol UPlayerAssetProcessorsQueueDelegate: AnyObject {
@@ -29,23 +33,55 @@ public protocol UPlayerAssetProcessorsQueueDelegate: AnyObject {
 }
 
 public protocol UPlayerAssetProcessorsQueueProtocol: AnyObject {
+
     var isRunning: Bool { get }
-    var current: UPlayerAssetProcessorProtocol? { get }
+
     var delegate: UPlayerAssetProcessorsQueueDelegate? { get set }
 
-    func start(asset: UPlayerAssetProtocol)
+    @discardableResult
+    func start(asset: UPlayerAssetProtocol) -> UPlayerAssetProcessingID
+
     func stop()
-    
+    func stop(id: UPlayerAssetProcessingID)
+
     func add(processor: UPlayerAssetProcessorProtocol)
     func remove(processor: UPlayerAssetProcessorProtocol)
 }
 
-public class UPlayerAssetProcessorsQueue: UPlayerAssetProcessorsQueueProtocol {
-    
+private final class ProcessingSession {
+
+    let id: UPlayerAssetProcessingID
+    let asset: UPlayerAssetProtocol
+    let processors: [UPlayerAssetProcessorProtocol]
+
+    var cancellable: AnyCancellable?
+
+    init(id: UPlayerAssetProcessingID,
+         asset: UPlayerAssetProtocol,
+         processors: [UPlayerAssetProcessorProtocol]) {
+        self.id = id
+        self.asset = asset
+        self.processors = processors
+    }
+
+    func cancel() {
+        processors.forEach {
+            $0.cancel()
+        }
+
+        cancellable?.cancel()
+        cancellable = nil
+    }
+}
+
+public final class UPlayerAssetProcessorsQueue: UPlayerAssetProcessorsQueueProtocol {
+
     // MARK: Fields
     
-    private var processors = [UPlayerAssetProcessorProtocol]()
-    private var cancellables = Set<AnyCancellable>()
+    private var processorTemplates: [UPlayerAssetProcessorProtocol] = []
+    private var sessions: [UPlayerAssetProcessingID: ProcessingSession] = [:]
+
+    private let lock = NSLock()
 
     // MARK: Constructors/Destructor
     
@@ -54,78 +90,127 @@ public class UPlayerAssetProcessorsQueue: UPlayerAssetProcessorsQueueProtocol {
     // MARK: UPlayerAssetProcessorsQueueProtocol
     
     public weak var delegate: UPlayerAssetProcessorsQueueDelegate?
-    
+
     public var isRunning: Bool {
-        return current != nil
+        lock.lock()
+        defer { lock.unlock() }
+
+        return !sessions.isEmpty
     }
-    
-    public var current: UPlayerAssetProcessorProtocol? {
-        return processors.first { listed in
-            return listed.isRunning
+
+    @discardableResult
+    public func start(asset: UPlayerAssetProtocol) -> UPlayerAssetProcessingID {
+
+        let processingID = UUID()
+
+        let processors = processorTemplates.map {
+            $0.makeProcessor()
         }
-    }
 
-    public func start(asset: UPlayerAssetProtocol) {
+        let session = ProcessingSession(
+            id: processingID,
+            asset: asset,
+            processors: processors
+        )
+
+        lock.lock()
+        sessions[processingID] = session
+        lock.unlock()
+
         delegate?.didStartProcessing(source: self)
-        
-        log("\(logScope) started", loggingLevel: .debug)
 
-        processors.reduce(
+        log("\(logScope) started, id: \(processingID), asset: \(asset.url)", loggingLevel: .debug)
+
+        let publisher = processors.reduce(
             Just(asset)
                 .setFailureType(to: Error.self)
-                .eraseToAnyPublisher()
-        ) { chain, processor in
-            
-            chain.flatMap { asset in
-                log("\(logScope) proccessing: \(asset.url)", loggingLevel: .debug)
-                return processor.process(asset: asset)
-            }
-            .eraseToAnyPublisher()
-        }
-        .sink(
-            receiveCompletion: { [weak self] completion in
-                guard let self else {
-                    return
+                .eraseToAnyPublisher()) { chain, processor in
+
+            chain
+                .flatMap { asset -> AnyPublisher<UPlayerAssetProtocol, Error> in
+
+                    log("\(logScope) processing: \(asset.url), processor: \(processor.id), id: \(processingID)", loggingLevel: .debug)
+
+                    return processor.process(asset: asset)
                 }
+                .eraseToAnyPublisher()
+        }
+
+        session.cancellable = publisher.sink(receiveCompletion: { [weak self] completion in
+                guard let self else { return }
+
                 switch completion {
+
                 case .finished:
-                    log("\(logScope) succeed", loggingLevel: .debug)
+                    log("\(logScope) succeed, id: \(processingID), asset: \(asset.url)", loggingLevel: .debug)
+
                 case .failure(let error):
-                    log("\(logScope) failed: \(error)", loggingLevel: .error)
+                    log("\(logScope) failed, id: \(processingID), asset: \(asset.url), error: \(error)", loggingLevel: .error)
+
                     self.delegate?.didFinishProcessing(source: self, error: error)
                 }
+
+                self.removeSession(id: processingID)
             },
+
             receiveValue: { [weak self] finalAsset in
-                guard let self else {
-                    return
-                }
-                log("\(logScope) end", loggingLevel: .debug)
+                guard let self else { return }
+
+                log("\(logScope) end, id: \(processingID), asset: \(finalAsset.url)", loggingLevel: .debug)
+
                 self.delegate?.didFinishProcessing(source: self, asset: finalAsset)
             }
         )
-        .store(in: &cancellables)
+
+        return processingID
     }
-    
+
+    public func stop(id: UPlayerAssetProcessingID) {
+
+        lock.lock()
+        let session = sessions[id]
+        lock.unlock()
+
+        session?.cancel()
+
+        removeSession(id: id)
+    }
+
     public func stop() {
-        processors.forEach { listed in
-            listed.cancel()
+
+        lock.lock()
+        let allSessions = Array(sessions.values)
+        sessions.removeAll()
+        lock.unlock()
+
+        allSessions.forEach {
+            $0.cancel()
         }
     }
-    
+
     public func add(processor: UPlayerAssetProcessorProtocol) {
-        let isContains = processors.contains { listed in
-            return listed.id == processor.id
+        let contains = processorTemplates.contains {
+            $0.id == processor.id
         }
-        if isContains {
+
+        guard !contains else {
             return
         }
-        
-        processors.append(processor)
+
+        processorTemplates.append(processor)
+    }
+
+    public func remove(processor: UPlayerAssetProcessorProtocol) {
+        processorTemplates.removeAll {
+            $0.id == processor.id
+        }
     }
     
-    public func remove(processor: UPlayerAssetProcessorProtocol) {
-        processors.removeAll { listed in
-            return listed.id == processor.id
-        }
+    // MARK: Helpers
+
+    private func removeSession(id: UPlayerAssetProcessingID) {
+        lock.lock()
+        sessions.removeValue(forKey: id)
+        lock.unlock()
     }
 }

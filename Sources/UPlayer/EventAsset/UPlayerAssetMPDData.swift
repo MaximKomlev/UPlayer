@@ -341,6 +341,7 @@ public protocol UPlayerAssetMPDDataProtocol: AnyObject {
     var rawData: Data { get }
     
     var manifest: DASHManifest? { get }
+    var manifestType: DASHManifestType { get }
     
     init(rawData: Data)
     
@@ -352,6 +353,9 @@ public class UPlayerAssetMPDData: UPlayerAssetMPDDataProtocol {
     public var rawData: Data
 
     public var manifest: DASHManifest?
+    public var manifestType: DASHManifestType {
+        return manifest?.type ?? .staticVOD
+    }
 
     public required init(rawData: Data) {
         self.rawData = rawData

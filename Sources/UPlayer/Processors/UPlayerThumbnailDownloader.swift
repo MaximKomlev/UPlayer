@@ -110,6 +110,10 @@ public final class UPlayerThumbnailDownloader: UPlayerAssetProcessorProtocol {
     public func cancel() {
         isTaskCanceled.set { $0 = true }
     }
+    
+    public func makeProcessor() -> any UPlayerAssetProcessorProtocol {
+        return UPlayerThumbnailDownloader(id: id)
+    }
 }
 
 private extension UPlayerThumbnailDownloader {

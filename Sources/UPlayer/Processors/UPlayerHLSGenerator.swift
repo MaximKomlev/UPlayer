@@ -90,6 +90,10 @@ public final class UPlayerHLSGenerator: UPlayerAssetProcessorProtocol {
     public func cancel() {
         isTaskCanceled.set { $0 = true }
     }
+    
+    public func makeProcessor() -> any UPlayerAssetProcessorProtocol {
+        return UPlayerHLSGenerator(id: id)
+    }
 }
 
 private extension UPlayerHLSGenerator {

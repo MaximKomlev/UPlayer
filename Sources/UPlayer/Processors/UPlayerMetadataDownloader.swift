@@ -107,6 +107,10 @@ private let logScope = "[mpd downloading]"
         task.value?.cancel()
     }
     
+    public func makeProcessor() -> any UPlayerAssetProcessorProtocol {
+        return UPlayerMetadataDownloader(id: id)
+    }
+
     // MARK: Detect Media Type
     
     private func detectMediaTypeWithRange(asset: UPlayerAssetProtocol) -> AnyPublisher<UPlayerAssetProtocol, Error> {

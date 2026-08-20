@@ -17,6 +17,8 @@ class ViewController: UIViewController {
     private let customScrubber = UISlider()
     private var isScrubbing: Bool = false
     private let preview = UIImageView()
+    private let assetCache = UPlayerAssetCache()
+    private let mpdProcessors = UPlayerAssetProcessorsQueue()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -77,6 +79,7 @@ class ViewController: UIViewController {
 
         player.registerAudioTranscoder(UPlayerG711ToAACTranscoder(), forCodec: .g711)
         player.assetProcessorsQueue = UPlayerAssetProcessorsQueue()
+        player.assetCache = assetCache
         player.delegate = self
 
         player.assetProcessorsQueue?.add(processor: UPlayerMetadataDownloader(id: "downloadAssetProcessor"))
@@ -85,11 +88,51 @@ class ViewController: UIViewController {
         player.assetProcessorsQueue?.add(processor: UPlayerSegmentBaseHLSGenerator(id: "hlsSegmentBaseAssetProcessor"))
         player.assetProcessorsQueue?.add(processor: UPlayerMPDToMP4Resolver(id: "MPDToMP4ResolverAssetProcessor"))
         player.assetProcessorsQueue?.add(processor: UPlayerHLSGenerator(id: "hlsGeneratorAssetProcessor"))
+        
+        mpdProcessors.add(processor: UPlayerMetadataDownloader(id: "downloadAssetProcessor"))
+        mpdProcessors.add(processor: UPlayerMPDParser(id: "mpdParserAssetProcessor"))
+        mpdProcessors.add(processor: UPlayerThumbnailDownloader(id: "thumbnailDownloaderProcessor"))
+        mpdProcessors.add(processor: UPlayerSegmentBaseHLSGenerator(id: "hlsSegmentBaseAssetProcessor"))
+        mpdProcessors.add(processor: UPlayerMPDToMP4Resolver(id: "MPDToMP4ResolverAssetProcessor"))
+        mpdProcessors.add(processor: UPlayerHLSGenerator(id: "hlsGeneratorAssetProcessor"))
+        mpdProcessors.delegate = self
     }
             
     @objc private func rightNavBarButtonAction(sender: UIBarButtonItem) {
         let alert = UIAlertController(title: "Video list", message: "Please chose video to play", preferredStyle: .actionSheet)
-        
+
+        alert.addAction(UIAlertAction(title: "Preprocess", style: .default , handler:{ (UIAlertAction)in
+            if let url = URL(string: "https://livesim.dashif.org/livesim/testpic_2s/Manifest.mpd"),
+               (try? self.assetCache.asset(url: url)) == nil {
+                let asset = UPlayerAsset(url: url)
+                self.mpdProcessors.start(asset: asset)
+            }
+
+            if let url = URL(string: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_multiple_tiled_thumbnails.mpd"),
+               (try? self.assetCache.asset(url: url)) == nil {
+                let asset = UPlayerAsset(url: url)
+                self.mpdProcessors.start(asset: asset)
+            }
+            
+            if let url = URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_simple_2014_05_09.mpd"),
+               (try? self.assetCache.asset(url: url)) == nil {
+                let asset = UPlayerAsset(url: url)
+                self.mpdProcessors.start(asset: asset)
+            }
+
+            if let url = URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_onDemand_2014_05_09.mpd"),
+               (try? self.assetCache.asset(url: url)) == nil {
+                let asset = UPlayerAsset(url: url)
+                self.mpdProcessors.start(asset: asset)
+            }
+
+            if let url = URL(string: "https://dash.akamaized.net/dash264/TestCasesIOP33/adapatationSetSwitching/5/manifest.mpd"),
+               (try? self.assetCache.asset(url: url)) == nil {
+                let asset = UPlayerAsset(url: url)
+                self.mpdProcessors.start(asset: asset)
+            }
+        }))
+
         alert.addAction(UIAlertAction(title: "Live", style: .default , handler:{ (UIAlertAction)in
             guard let url = URL(string: "https://livesim.dashif.org/livesim/testpic_2s/Manifest.mpd") else {
                 return
@@ -268,3 +311,17 @@ extension ViewController: UPlayerDelegate {
     }
 }
 
+extension ViewController: UPlayerAssetProcessorsQueueDelegate {
+    func didStartProcessing(source: any UPlayerAssetProcessorsQueueProtocol) {
+    }
+    
+    func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, error: (any Error)?) {
+    }
+    
+    func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, asset: any UPlayerAssetProtocol) {
+        if asset.mpdMetadata?.manifestType == .dynamicLive {
+            return
+        }
+        assetCache.addAsset(asset)
+    }
+}

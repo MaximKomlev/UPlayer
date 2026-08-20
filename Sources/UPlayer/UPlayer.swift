@@ -355,7 +355,7 @@ public class UPlayer: UPlayerProtocol {
     private func startPullingLiveMpd(asset: UPlayerAssetProtocol) {
         switch asset.type {
         case .mpd:
-            if asset.mpdMetadata?.manifest?.type != .dynamicLive {
+            if asset.mpdMetadata?.manifestType != .dynamicLive {
                 return
             }
             
