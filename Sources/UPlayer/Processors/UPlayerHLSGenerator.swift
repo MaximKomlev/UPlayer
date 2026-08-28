@@ -111,7 +111,7 @@ private extension UPlayerHLSGenerator {
                         continue
                     }
 
-                    //log("\(logScope) playlist: \(playlist)")
+                    log("\(logScope) playlist: \(playlist)", loggingLevel: .debug)
                     result[playlistFileName(for: representation)] = playlist
                 }
             }
@@ -153,25 +153,45 @@ private extension UPlayerHLSGenerator {
 
         if let timeline = template.timeline, !timeline.isEmpty {
             allSegments = timeline.map {
-                DASHSegment(number: $0.number, time: $0.pts, duration: $0.duration)
+                DASHSegment(number: $0.number,
+                            time: $0.pts,
+                            duration: $0.duration)
             }
         } else if manifest.type == .dynamicLive {
             allSegments = expandLiveDurationBasedSegments(manifest: manifest,
                                                           period: period,
                                                           template: template)
         } else {
-            let totalDuration = period.duration ?? manifest.mediaPresentationDuration ?? 0
+            let totalDuration =
+                period.duration ??
+                manifest.mediaPresentationDuration ??
+                0
+
             allSegments = expandDurationBasedSegments(template: template,
                                                       totalDurationSeconds: totalDuration)
         }
 
-        guard !allSegments.isEmpty else { return nil }
+        guard !allSegments.isEmpty else {
+            return nil
+        }
 
-        let initURL = buildInitURL(manifest: manifest,
+        let needsAudioTranscoding =
+            shouldRouteAudioThroughResourceLoader(adaptation: adaptation,
+                                                  representation: representation)
+
+        let initURL: String
+
+        if needsAudioTranscoding {
+            // Original init segment describes G711/A-law MP4.
+            // It must not be used for AAC/ADTS output.
+            initURL = ""
+        } else {
+            initURL = buildInitURL(manifest: manifest,
                                    period: period,
                                    adaptation: adaptation,
                                    representation: representation,
                                    template: template)
+        }
 
         if manifest.type == .dynamicLive {
             return updateLivePlaylistState(manifest: manifest,
@@ -183,20 +203,24 @@ private extension UPlayerHLSGenerator {
                                            initURL: initURL)
         }
 
-        // existing VOD logic...
         let segments = allSegments
+
         let targetDuration = max(
             1,
             Int(
                 ceil(
                     segments
-                        .map { Double($0.duration) / Double(template.timescale) }
+                        .map {
+                            Double($0.duration) /
+                            Double(max(1, template.timescale))
+                        }
                         .max() ?? 1
                 )
             )
         )
 
         var playlist = ""
+
         playlist += "#EXTM3U\n"
         playlist += "#EXT-X-VERSION:7\n"
         playlist += "#EXT-X-TARGETDURATION:\(targetDuration)\n"
@@ -208,18 +232,24 @@ private extension UPlayerHLSGenerator {
         }
 
         for segment in segments {
-            let extinf = Double(segment.duration) / Double(template.timescale)
+            let extinf =
+                Double(segment.duration) /
+                Double(max(1, template.timescale))
+
             playlist += "#EXTINF:\(String(format: "%.3f", extinf)),\n"
+
             playlist += buildSegmentURL(manifest: manifest,
                                         period: period,
                                         adaptation: adaptation,
                                         representation: representation,
                                         template: template,
                                         number: segment.number)
+
             playlist += "\n"
         }
 
         playlist += "#EXT-X-ENDLIST\n"
+
         return playlist
     }
 
@@ -254,84 +284,151 @@ private extension UPlayerHLSGenerator {
     }
 
     func generateMaster(manifest: DASHManifest) -> String {
+
         var master = "#EXTM3U\n"
         master += "#EXT-X-VERSION:7\n"
 
-        let audioAdaptations = manifest.periods
-            .flatMap(\.adaptationSets)
-            .filter { $0.type == .audio }
+        let allAdaptations =
+            manifest.periods.flatMap(\.adaptationSets)
 
-        let videoAdaptations = manifest.periods
-            .flatMap(\.adaptationSets)
-            .filter { $0.type == .video }
+        let audioAdaptations = allAdaptations.filter {
+            $0.type == .audio ||
+            $0.mimeType?.lowercased().hasPrefix("audio/") == true
+        }
 
-        let firstAudioRep = audioAdaptations
-            .flatMap(\.representations)
-            .sorted { $0.bandwidth > $1.bandwidth }
-            .first
+        let videoAdaptations = allAdaptations.filter {
+            $0.type == .video ||
+            $0.mimeType?.lowercased().hasPrefix("video/") == true
+        }
 
-        let hasVideo = !videoAdaptations.isEmpty
-        let hasAudio = !audioAdaptations.isEmpty
+        let audioCandidates:
+            [(adaptation: DASHAdaptationSet,
+              representation: DASHRepresentation)] =
+            audioAdaptations.flatMap { adaptation in
 
-        // Audio-only master
-        if !hasVideo && hasAudio {
-            for adaptation in audioAdaptations {
-                for rep in adaptation.representations {
-                    let playlistURL = playlistURLString(manifest: manifest,
-                                                        representation: rep)
-
-                    var streamInf = "#EXT-X-STREAM-INF:BANDWIDTH=\(rep.bandwidth)"
-
-                    if let codecs = hlsAudioCodec(for: rep), !codecs.isEmpty {
-                        streamInf += ",CODECS=\"\(codecs)\""
-                    }
-                    
-                    master += streamInf + "\n"
-                    master += playlistURL + "\n"
+                adaptation.representations.map {
+                    (
+                        adaptation: adaptation,
+                        representation: $0
+                    )
                 }
             }
 
-            //log("\(logScope) master: \(master)")
+        let primaryAudio = audioCandidates
+            .sorted {
+                $0.representation.bandwidth >
+                $1.representation.bandwidth
+            }
+            .first
+
+        let hasVideo = !videoAdaptations.isEmpty
+        let hasAudio = !audioCandidates.isEmpty
+
+        // MARK: Audio-only
+
+        if !hasVideo && hasAudio {
+
+            for candidate in audioCandidates {
+
+                let adaptation = candidate.adaptation
+                let rep = candidate.representation
+
+                let playlistURL = playlistURLString(manifest: manifest,
+                                                    representation: rep)
+
+                var streamInf =
+                    "#EXT-X-STREAM-INF:BANDWIDTH=\(rep.bandwidth)"
+
+                if let codec = hlsAudioCodec(adaptation: adaptation,
+                                             representation: rep), !codec.isEmpty {
+
+                    streamInf += ",CODECS=\"\(codec)\""
+                }
+
+                master += streamInf + "\n"
+                master += playlistURL + "\n"
+            }
+
+            //log("\(logScope) master: \(master)", loggingLevel: .debug)
+
             return master
         }
 
-        // Video + external audio
-        if let audioRep = firstAudioRep {
-            let audioPlaylistURL = playlistURLString(manifest: manifest,
-                                                     representation: audioRep)
+        // MARK: External audio rendition
+
+        if let primaryAudio {
+
+            let audioRep =
+                primaryAudio.representation
+
+            let audioPlaylistURL =
+                playlistURLString(
+                    manifest: manifest,
+                    representation: audioRep
+                )
 
             master += """
             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="eng",DEFAULT=YES,AUTOSELECT=YES,LANGUAGE="eng",URI="\(audioPlaylistURL)"
             """
+
             master += "\n"
         }
 
+        // MARK: Video variants
+
         for adaptation in videoAdaptations {
+
             for rep in adaptation.representations {
-                let playlistURL = playlistURLString(manifest: manifest,
-                                                    representation: rep)
 
-                let totalBandwidth = rep.bandwidth + (firstAudioRep?.bandwidth ?? 0)
-                var streamInf = "#EXT-X-STREAM-INF:BANDWIDTH=\(totalBandwidth)"
+                let playlistURL =
+                    playlistURLString(
+                        manifest: manifest,
+                        representation: rep
+                    )
 
-                if let width = rep.width, let height = rep.height {
-                    streamInf += ",RESOLUTION=\(width)x\(height)"
+                let audioBandwidth =
+                    primaryAudio?
+                        .representation
+                        .bandwidth ?? 0
+
+                let totalBandwidth =
+                    rep.bandwidth +
+                    audioBandwidth
+
+                var streamInf =
+                    "#EXT-X-STREAM-INF:BANDWIDTH=\(totalBandwidth)"
+
+                if let width = rep.width,
+                   let height = rep.height {
+
+                    streamInf +=
+                        ",RESOLUTION=\(width)x\(height)"
                 }
 
-                var codecsList: [String] = []
-                if let videoCodecs = rep.codecs, !videoCodecs.isEmpty {
-                    codecsList.append(videoCodecs)
-                }
-                if let audioRep = firstAudioRep,
-                   let audioCodecs = hlsAudioCodec(for: audioRep),
-                   !audioCodecs.isEmpty {
-                    codecsList.append(audioCodecs)
-                }
-                if !codecsList.isEmpty {
-                    streamInf += ",CODECS=\"\(codecsList.joined(separator: ","))\""
+                var codecs: [String] = []
+
+                if let videoCodec = rep.codecs,
+                   !videoCodec.isEmpty {
+
+                    codecs.append(videoCodec)
                 }
 
-                if firstAudioRep != nil {
+                if let primaryAudio,
+                   let audioCodec = hlsAudioCodec(
+                        adaptation: primaryAudio.adaptation,
+                        representation: primaryAudio.representation
+                   ),
+                   !audioCodec.isEmpty {
+
+                    codecs.append(audioCodec)
+                }
+
+                if !codecs.isEmpty {
+                    streamInf +=
+                        ",CODECS=\"\(codecs.joined(separator: ","))\""
+                }
+
+                if primaryAudio != nil {
                     streamInf += ",AUDIO=\"audio\""
                 }
 
@@ -340,7 +437,11 @@ private extension UPlayerHLSGenerator {
             }
         }
 
-        //log("\(logScope) master: \(master)")
+        log(
+            "\(logScope) master: \(master)",
+            loggingLevel: .debug
+        )
+
         return master
     }
 
@@ -518,25 +619,54 @@ private extension UPlayerHLSGenerator {
                          representation: DASHRepresentation,
                          template: DASHSegmentTemplate,
                          number: Int) -> String {
+
         guard var media = template.media else {
             return ""
         }
 
-        media = media.replacingOccurrences(of: "$Number$", with: "\(number)")
-        media = media.replacingOccurrences(of: "$RepresentationID$", with: representation.id)
-        media = media.replacingOccurrences(of: "$Bandwidth$", with: "\(representation.bandwidth)")
+        media = media.replacingOccurrences(of: "$Number$",
+                                           with: "\(number)")
 
-        let base = representation.baseURL ?? adaptation.baseURL ?? period.baseURL ?? manifest.baseURL
-        let resolved = base.flatMap {
-            return URL(string: media, relativeTo: $0)?.absoluteString
-        } ?? media
+        media = media.replacingOccurrences(of: "$RepresentationID$",
+                                           with: representation.id)
 
-        if shouldRouteAudioThroughResourceLoader(representation) {
-            return makeTranscodeURL(resolved,
-                                    originalCodec: representation.codecs)
+        media = media.replacingOccurrences(of: "$Bandwidth$",
+                                           with: "\(representation.bandwidth)")
+
+        let base =
+            representation.baseURL ??
+            adaptation.baseURL ??
+            period.baseURL ??
+            manifest.baseURL
+
+        let resolved: String
+
+        if let absoluteURL = URL(string: media),
+           absoluteURL.scheme != nil {
+
+            // Important for your MPD:
+            // media=""https://media-service...?...SequenceNumber=$Number$..."
+            resolved = absoluteURL.absoluteString
+
+        } else if let base {
+            resolved =
+                URL(string: media, relativeTo: base)?
+                .absoluteURL
+                .absoluteString
+                ?? media
+        } else {
+            resolved = media
         }
 
-        return resolved
+        guard shouldRouteAudioThroughResourceLoader(adaptation: adaptation,
+                                                    representation: representation) else {
+            return resolved
+        }
+
+        return makeTranscodeURL(
+            resolved,
+            originalCodec: representation.codecs
+        )
     }
 
     func buildInitURL(manifest: DASHManifest,
@@ -544,24 +674,37 @@ private extension UPlayerHLSGenerator {
                       adaptation: DASHAdaptationSet,
                       representation: DASHRepresentation,
                       template: DASHSegmentTemplate) -> String {
+
         guard var initialization = template.initialization else {
             return ""
         }
-        
-        initialization = initialization.replacingOccurrences(of: "$RepresentationID$", with: representation.id)
-        initialization = initialization.replacingOccurrences(of: "$Bandwidth$", with: "\(representation.bandwidth)")
-        
-        let base = representation.baseURL ?? adaptation.baseURL ?? period.baseURL ?? manifest.baseURL
-        let resolved = base.flatMap {
-            return URL(string: initialization, relativeTo: $0)?.absoluteString
-        } ?? initialization
-        
-        if shouldRouteAudioThroughResourceLoader(representation) {
-            return makeTranscodeURL(resolved,
-                                    originalCodec: representation.codecs)
+
+        initialization = initialization.replacingOccurrences(of: "$RepresentationID$",
+                                                             with: representation.id)
+
+        initialization = initialization.replacingOccurrences(of: "$Bandwidth$",
+                                                             with: "\(representation.bandwidth)")
+
+        if let absoluteURL = URL(string: initialization),
+           absoluteURL.scheme != nil {
+
+            return absoluteURL.absoluteString
         }
-        
-        return resolved
+
+        let base =
+            representation.baseURL ??
+            adaptation.baseURL ??
+            period.baseURL ??
+            manifest.baseURL
+
+        guard let base else {
+            return initialization
+        }
+
+        return URL(string: initialization, relativeTo: base)?
+        .absoluteURL
+        .absoluteString
+        ?? initialization
     }
 
     func buildRepresentationMediaURL(manifest: DASHManifest,
@@ -572,7 +715,15 @@ private extension UPlayerHLSGenerator {
     }
 
     func playlistFileName(for representation: DASHRepresentation) -> String {
-        "\(representation.bandwidth).m3u8"
+
+        let safeID = representation.id
+            .replacingOccurrences(
+                of: "[^a-zA-Z0-9_-]",
+                with: "_",
+                options: .regularExpression
+            )
+
+        return "\(safeID)_\(representation.bandwidth).m3u8"
     }
 
     func playlistURLString(manifest: DASHManifest, representation: DASHRepresentation) -> String {
@@ -735,59 +886,154 @@ private extension UPlayerHLSGenerator {
                                   segments: state.segments)
     }
     
-    func isAudioAcceptedByAVPlayer(_ representation: DASHRepresentation) -> Bool {
-        guard representation.mimeType?.contains("audio") == true ||
-              representation.codecs?.contains("mp4a") == true else {
+    func normalizeAudioCodec(_ codec: String?) -> String? {
+
+        guard let codec = codec?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+              !codec.isEmpty else {
+            return nil
+        }
+
+        let parts = codec.split(separator: ".")
+
+        if parts.count == 3,
+           parts[0] == "mp4a",
+           parts[1] == "40",
+           let objectType = Int(parts[2]) {
+
+            return "mp4a.40.\(objectType)"
+        }
+
+        return codec
+    }
+
+    func isAudioRepresentation(adaptation: DASHAdaptationSet,
+                               representation: DASHRepresentation) -> Bool {
+
+        // Primary source.
+        if adaptation.type == .audio {
             return true
         }
 
-        guard let codecs = normalizeMP4ACodec(representation.codecs) else {
+        // MPD in this question hits this path.
+        if adaptation.mimeType?
+            .lowercased()
+            .hasPrefix("audio/") == true {
+
+            return true
+        }
+
+        if representation.mimeType?
+            .lowercased()
+            .hasPrefix("audio/") == true {
+
+            return true
+        }
+
+        guard let codec = normalizeAudioCodec(representation.codecs) else {
             return false
         }
 
-        // AVPlayer generally accepts AAC-LC/HE-AAC in fMP4.
-        // Keep this conservative.
-        if codecs == "mp4a.40.2" { return true } // AAC-LC
-        if codecs == "mp4a.40.5" { return true } // HE-AAC
-        if codecs == "mp4a.40.29" { return true } // HE-AACv2
+        switch codec {
+        case "alaw",
+             "ulaw",
+             "pcma",
+             "pcmu",
+             "g711",
+             "g711a",
+             "g711u":
 
-        return false
-    }
-    
-    func shouldRouteAudioThroughResourceLoader(_ representation: DASHRepresentation) -> Bool {
-        let isAudio =
-            representation.mimeType?.contains("audio") == true ||
-            representation.codecs?.lowercased().contains("mp4a") == true
+            return true
 
-        return isAudio && !isAudioAcceptedByAVPlayer(representation)
+        default:
+            return codec.hasPrefix("mp4a.") ||
+                   codec.contains("g711") ||
+                   codec.contains("g.711")
+        }
     }
-    
+
+    func isAudioAcceptedByAVPlayer(adaptation: DASHAdaptationSet,
+                                   representation: DASHRepresentation) -> Bool {
+
+        guard isAudioRepresentation(adaptation: adaptation,
+                                    representation: representation) else {
+            return true
+        }
+
+        guard let codec = normalizeAudioCodec(representation.codecs) else {
+            return false
+        }
+
+        switch codec {
+
+        case "mp4a.40.2",    // AAC-LC
+             "mp4a.40.5",    // HE-AAC
+             "mp4a.40.29":   // HE-AAC v2
+
+            return true
+
+        default:
+            return false
+        }
+    }
+
+    func shouldRouteAudioThroughResourceLoader(adaptation: DASHAdaptationSet,
+                                               representation: DASHRepresentation) -> Bool {
+
+        guard isAudioRepresentation(adaptation: adaptation,
+                                    representation: representation) else {
+            return false
+        }
+
+        return !isAudioAcceptedByAVPlayer(adaptation: adaptation,
+                                          representation: representation)
+    }
+
+    func hlsAudioCodec(adaptation: DASHAdaptationSet,
+                       representation: DASHRepresentation) -> String? {
+
+        if shouldRouteAudioThroughResourceLoader(adaptation: adaptation,
+                                                 representation: representation) {
+            // Output of UPlayerG711ToAACTranscoder
+            return "mp4a.40.2"
+        }
+
+        return normalizeAudioCodec(representation.codecs)
+    }
+
     func makeTranscodeURL(_ url: String,
                           originalCodec: String?) -> String {
+
         guard let sourceURL = URL(string: url),
-              var components = URLComponents(url: sourceURL, resolvingAgainstBaseURL: false) else {
+              var components = URLComponents(url: sourceURL,
+                                             resolvingAgainstBaseURL: false) else {
             return url
         }
 
         components.scheme = "uplayer"
 
         var queryItems = components.queryItems ?? []
-        queryItems.append(URLQueryItem(name: "mode", value: "audio-transcode"))
 
-        if let originalCodec, !originalCodec.isEmpty {
-            queryItems.append(URLQueryItem(name: "codec", value: originalCodec))
+        queryItems.removeAll {
+            $0.name == "mode" ||
+            $0.name == "codec"
+        }
+
+        queryItems.append(URLQueryItem(name: "mode",
+                                       value: "audio-transcode"))
+
+        if let codec = normalizeAudioCodec(originalCodec) {
+            queryItems.append(
+                URLQueryItem(
+                    name: "codec",
+                    value: codec
+                )
+            )
         }
 
         components.queryItems = queryItems
 
         return components.url?.absoluteString ?? url
-    }
-    
-    func hlsAudioCodec(for representation: DASHRepresentation) -> String? {
-        if shouldRouteAudioThroughResourceLoader(representation) {
-            return "mp4a.40.2" // transcoder outputs AAC-LC
-        }
-
-        return representation.codecs
     }
 }

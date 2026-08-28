@@ -46,7 +46,7 @@ public enum UPlayerPlayerState: Int, CustomStringConvertible {
     }
 }
 
-public class UPlayerView: UIView {
+open class UPlayerView: UIView {
     private let playerLayer: AVPlayerLayer
 
     public override class var layerClass: AnyClass {
@@ -82,13 +82,13 @@ public class UPlayerView: UIView {
         layer.masksToBounds = true
     }
 
-    required init?(coder aDecoder: NSCoder) {
+    required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
     // MARK: View life cycle
 
-    public override func layoutSubviews() {
+    open override func layoutSubviews() {
         super.layoutSubviews()
         
         let viewWidth = bounds.width
@@ -124,6 +124,7 @@ public protocol UPlayerProtocol: AnyObject {
 
     var state: UPlayerPlayerState { get }
     var isMuted: Bool { get set }
+    var rate: Double { get set }
     var currentPlayingTime: TimeInterval { get }
     var isThumbnailsSupported: Bool { get }
     
@@ -139,9 +140,10 @@ public protocol UPlayerProtocol: AnyObject {
     func stop()
     func pause()
     func unpause()
-
-    func rate(_ value: Double)
+    func restart()
+    
     func seek(_ value: TimeInterval)
+    func seek(_ value: TimeInterval, completionHandler: ((Bool) -> ())?)
     
     func thumbnail(at time: TimeInterval) -> UIImage?
     
@@ -226,6 +228,14 @@ public class UPlayer: UPlayerProtocol {
         }
     }
     
+    public var rate: Double {
+        get {
+            return Double(avPlayer.rate)
+        } set {
+            avPlayer.rate = Float(rate)
+        }
+    }
+    
     public var currentPlayingTime: TimeInterval = 0.0 {
         didSet {
             delegate?.didEventPlayerChange(source: self, playingTime: currentPlayingTime)
@@ -300,16 +310,34 @@ public class UPlayer: UPlayerProtocol {
     public func unpause() {
         avPlayer.play()
     }
-    
-    public func rate(_ value: Double) {
-        avPlayer.rate = Float(exactly: value) ?? 1.0
+        
+    public func restart() {
+        avPlayer.pause()
+        
+        avPlayer.seek(
+            to: .zero,
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        ) { [weak self] finished in
+            guard finished else {
+                return
+            }
+            self?.avPlayer.play()
+        }
     }
     
     public func seek(_ value: TimeInterval) {
         let time = CMTime(seconds: Double(value), preferredTimescale: 1)
         avPlayer.seek(to: time)
     }
-    
+
+    public func seek(_ value: TimeInterval, completionHandler: ((Bool) -> ())?) {
+        let time = CMTime(seconds: Double(value), preferredTimescale: 1)
+        avPlayer.seek(to: time) { state in
+            completionHandler?(state)
+        }
+    }
+
     public func thumbnail(at time: TimeInterval) -> UIImage? {
         if let cue = asset?.thumbnailMetadata?.cue(for: time),
            let image = asset?.thumbnailMetadata?.image(for: cue) {

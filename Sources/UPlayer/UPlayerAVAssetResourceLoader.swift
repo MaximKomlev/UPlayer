@@ -69,6 +69,7 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
 private extension UPlayerAVAssetResourceLoader {
 
     func isAudioTranscodeRequest(_ url: URL) -> Bool {
+        return false
         URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?
             .contains { $0.name == "mode" && $0.value == "audio-transcode" } == true
@@ -82,10 +83,8 @@ private extension UPlayerAVAssetResourceLoader {
     }
 
     func originalHTTPURL(from url: URL) -> URL? {
-        guard var components = URLComponents(
-            url: url,
-            resolvingAgainstBaseURL: false
-        ) else {
+        guard var components = URLComponents(url: url,
+                                             resolvingAgainstBaseURL: false) else {
             return nil
         }
 
@@ -141,22 +140,24 @@ private extension UPlayerAVAssetResourceLoader {
                              byteRangeSupported: true,
                              loadingRequest: loadingRequest)
             } catch {
+                log("\(logScope) audio transcoding for \(url.absoluteString) failed, \(error.localizedDescription)", loggingLevel: .error)
                 loadingRequest.finishLoading(with: error)
             }
         }
     }
 
     func download(url: URL) async throws -> Data {
-        let request = URLRequest(
-            url: url,
-            cachePolicy: .returnCacheDataElseLoad,
-            timeoutInterval: 30
-        )
+        let request = URLRequest(url: url,
+                                 cachePolicy: .returnCacheDataElseLoad,
+                                 timeoutInterval: 30)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let http = response as? HTTPURLResponse,
-              (200...299).contains(http.statusCode) else {
+        guard let http = response as? HTTPURLResponse else {
+            throw UPlayerErrorsList.invalidHTTPResponse
+        }
+
+        guard (200...299).contains(http.statusCode) else {
             throw UPlayerErrorsList.invalidHTTPResponse
         }
 

@@ -139,7 +139,7 @@ private extension UPlayerSegmentBaseHLSGenerator {
                         continue
                     }
                     
-                    //log("\(logScope) playlist: \(playlist)")
+                    //log("\(logScope) playlist: \(playlist)", loggingLevel: .debug)
                     result[playlistFileName(for: representation)] = playlist
                 }
             }
@@ -207,7 +207,7 @@ private extension UPlayerSegmentBaseHLSGenerator {
                 }
             }
             
-            //log("\(logScope) master: \(master)")
+            //log("\(logScope) master: \(master)", loggingLevel: .debug)
             return master
         }
         
