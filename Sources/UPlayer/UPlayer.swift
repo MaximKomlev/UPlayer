@@ -136,6 +136,8 @@ public protocol UPlayerProtocol: AnyObject {
 
     var delegate: UPlayerDelegate? { get set }
 
+    func attachPlayerView(_ view: UPlayerView?)
+
     func play(url: URL)
     func stop()
     func pause()
@@ -232,7 +234,7 @@ public class UPlayer: UPlayerProtocol {
         get {
             return Double(avPlayer.rate)
         } set {
-            avPlayer.rate = Float(rate)
+            avPlayer.rate = Float(newValue)
         }
     }
     
@@ -252,14 +254,18 @@ public class UPlayer: UPlayerProtocol {
         }
     }
     
-    public var delegate: (any UPlayerDelegate)? {
+    public weak var delegate: (any UPlayerDelegate)? {
         didSet {
-            delegate?.playerView?.player = avPlayer
+            attachPlayerView(delegate?.playerView)
         }
     }
     
     public var isThumbnailsSupported: Bool {
         return asset?.thumbnailMetadata != nil
+    }
+    
+    public func attachPlayerView(_ view: UPlayerView?) {
+        view?.player = avPlayer
     }
     
     public func play(url: URL) {
@@ -370,7 +376,7 @@ public class UPlayer: UPlayerProtocol {
                     listed.attach(to: item)
                 }
 
-                if state != .loading && state != .playing {
+                if state != .playing {
                     log("\(logScope) started", loggingLevel: .debug)
                     avPlayer.play()
                 }

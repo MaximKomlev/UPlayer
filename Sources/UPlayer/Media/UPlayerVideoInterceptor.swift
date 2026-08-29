@@ -35,10 +35,8 @@ public final class UPlayerVideoInterceptor: NSObject, UPlayerMediaInterceptorPro
     }
 
     public func start() {
-        displayLink = CADisplayLink(
-            target: self,
-            selector: #selector(readFrame)
-        )
+        displayLink = CADisplayLink(target: self,
+                                    selector: #selector(readFrame))
         displayLink?.add(to: .main, forMode: .common)
     }
 
@@ -49,8 +47,7 @@ public final class UPlayerVideoInterceptor: NSObject, UPlayerMediaInterceptorPro
     
     public func attach(to item: AVPlayerItem) {
         let settings: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String:
-                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
         ]
 
         let output = AVPlayerItemVideoOutput(pixelBufferAttributes: settings)

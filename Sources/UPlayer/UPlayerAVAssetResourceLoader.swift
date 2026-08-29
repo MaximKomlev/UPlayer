@@ -127,17 +127,20 @@ private extension UPlayerAVAssetResourceLoader {
                 let sourceData = try await self.download(url: sourceURL)
 
                 let outputData: Data
+                var contentType = "audio/mp4"
                 if let audioTranscoder = self.audioTranscoder {
-                    outputData = try await audioTranscoder.transcodeAudioSegment(data: sourceData,
-                                                                                 initializationData: <#Data?#>,
-                                                                                 originalCodec: originalCodec,
-                                                                                 sourceURL: sourceURL)
+                    let transcodedAudioSegment = try await audioTranscoder.transcodeAudioSegment(data: sourceData,
+                                                                                                 initializationData: nil,
+                                                                                                 originalCodec: originalCodec,
+                                                                                                 sourceURL: sourceURL)
+                    outputData = transcodedAudioSegment.data
+                    contentType = transcodedAudioSegment.contentType
                 } else {
                     outputData = sourceData
                 }
 
                 self.respond(data: outputData,
-                             contentType: "audio/mp4",
+                             contentType: contentType,
                              byteRangeSupported: true,
                              loadingRequest: loadingRequest)
             } catch {
