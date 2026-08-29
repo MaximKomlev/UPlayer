@@ -33,6 +33,10 @@ public protocol UPlayerAVAssetResourceLoaderDelegate: AnyObject {
     func getPlaylist(source: UPlayerAVAssetResourceLoaderProtocol, url: URL) -> String?
 }
 
+public protocol UPlayerAVAssetResourceLoaderTranscodingDelegate: AnyObject {
+    func getAudioTranscoder(source: UPlayerAVAssetResourceLoaderProtocol) -> UPlayerAudioTranscoderProtocol?
+}
+
 public protocol UPlayerAVAssetResourceLoaderProtocol: AVAssetResourceLoaderDelegate {
     var dataDelegate: UPlayerAVAssetResourceLoaderDelegate? { get set }
 }
@@ -40,7 +44,7 @@ public protocol UPlayerAVAssetResourceLoaderProtocol: AVAssetResourceLoaderDeleg
 internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResourceLoaderProtocol {
 
     public weak var dataDelegate: UPlayerAVAssetResourceLoaderDelegate?
-    public weak var audioTranscoder: UPlayerAudioTranscoderProtocol?
+    public weak var transcoderDelegate: UPlayerAVAssetResourceLoaderTranscodingDelegate?
 
     public func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
                                shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
@@ -69,8 +73,7 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
 private extension UPlayerAVAssetResourceLoader {
 
     func isAudioTranscodeRequest(_ url: URL) -> Bool {
-        return false
-        URLComponents(url: url, resolvingAgainstBaseURL: false)?
+        return URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?
             .contains { $0.name == "mode" && $0.value == "audio-transcode" } == true
     }
@@ -128,7 +131,7 @@ private extension UPlayerAVAssetResourceLoader {
 
                 let outputData: Data
                 var contentType = "audio/mp4"
-                if let audioTranscoder = self.audioTranscoder {
+                if let audioTranscoder = self.transcoderDelegate?.getAudioTranscoder(source: self) {
                     let transcodedAudioSegment = try await audioTranscoder.transcodeAudioSegment(data: sourceData,
                                                                                                  initializationData: nil,
                                                                                                  originalCodec: originalCodec,
