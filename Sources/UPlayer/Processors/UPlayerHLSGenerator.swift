@@ -175,9 +175,8 @@ private extension UPlayerHLSGenerator {
             return nil
         }
 
-        let needsAudioTranscoding =
-            shouldRouteAudioThroughResourceLoader(adaptation: adaptation,
-                                                  representation: representation)
+        let needsAudioTranscoding = shouldTranscodeAudio(adaptation: adaptation,
+                                                         representation: representation)
 
         let initURL: String
 
@@ -206,18 +205,11 @@ private extension UPlayerHLSGenerator {
         let segments = allSegments
 
         let targetDuration = max(
-            1,
-            Int(
-                ceil(
-                    segments
-                        .map {
+            1, Int(ceil(segments.map {
                             Double($0.duration) /
                             Double(max(1, template.timescale))
                         }
-                        .max() ?? 1
-                )
-            )
-        )
+                        .max() ?? 1)))
 
         var playlist = ""
 
@@ -232,9 +224,7 @@ private extension UPlayerHLSGenerator {
         }
 
         for segment in segments {
-            let extinf =
-                Double(segment.duration) /
-                Double(max(1, template.timescale))
+            let extinf = Double(segment.duration) / Double(max(1, template.timescale))
 
             playlist += "#EXTINF:\(String(format: "%.3f", extinf)),\n"
 
@@ -649,17 +639,13 @@ private extension UPlayerHLSGenerator {
             resolved = absoluteURL.absoluteString
 
         } else if let base {
-            resolved =
-                URL(string: media, relativeTo: base)?
-                .absoluteURL
-                .absoluteString
-                ?? media
+            resolved = URL(string: media, relativeTo: base)?.absoluteURL.absoluteString ?? media
         } else {
             resolved = media
         }
 
-        guard shouldRouteAudioThroughResourceLoader(adaptation: adaptation,
-                                                    representation: representation) else {
+        guard shouldTranscodeAudio(adaptation: adaptation,
+                                   representation: representation) else {
             return resolved
         }
 
@@ -856,11 +842,9 @@ private extension UPlayerHLSGenerator {
 
         let segmentDuration = freshSegments.last?.duration ?? 2
         let overlapCount = 3
-        let maxCount = desiredSegmentCount(
-            bufferDepth: manifest.timeShiftBufferDepth ?? 30,
-            segmentDuration: segmentDuration,
-            overlapCount: overlapCount
-        )
+        let maxCount = desiredSegmentCount(bufferDepth: manifest.timeShiftBufferDepth ?? 30,
+                                           segmentDuration: segmentDuration,
+                                           overlapCount: overlapCount)
 
         let previousSegments = livePlaylistStates[playlistKey]?.segments ?? []
 
@@ -917,17 +901,11 @@ private extension UPlayerHLSGenerator {
         }
 
         // MPD in this question hits this path.
-        if adaptation.mimeType?
-            .lowercased()
-            .hasPrefix("audio/") == true {
-
+        if adaptation.mimeType?.lowercased().hasPrefix("audio/") == true {
             return true
         }
 
-        if representation.mimeType?
-            .lowercased()
-            .hasPrefix("audio/") == true {
-
+        if representation.mimeType?.lowercased().hasPrefix("audio/") == true {
             return true
         }
 
@@ -978,8 +956,8 @@ private extension UPlayerHLSGenerator {
         }
     }
 
-    func shouldRouteAudioThroughResourceLoader(adaptation: DASHAdaptationSet,
-                                               representation: DASHRepresentation) -> Bool {
+    func shouldTranscodeAudio(adaptation: DASHAdaptationSet,
+                              representation: DASHRepresentation) -> Bool {
 
         guard isAudioRepresentation(adaptation: adaptation,
                                     representation: representation) else {
@@ -993,7 +971,7 @@ private extension UPlayerHLSGenerator {
     func hlsAudioCodec(adaptation: DASHAdaptationSet,
                        representation: DASHRepresentation) -> String? {
 
-        if shouldRouteAudioThroughResourceLoader(adaptation: adaptation,
+        if shouldTranscodeAudio(adaptation: adaptation,
                                                  representation: representation) {
             // Output of UPlayerG711ToAACTranscoder
             return "mp4a.40.2"
@@ -1002,6 +980,7 @@ private extension UPlayerHLSGenerator {
         return normalizeAudioCodec(representation.codecs)
     }
 
+    /*
     func makeTranscodeURL(_ url: String,
                           originalCodec: String?) -> String {
 
@@ -1035,5 +1014,52 @@ private extension UPlayerHLSGenerator {
         components.queryItems = queryItems
 
         return components.url?.absoluteString ?? url
+    }
+    */
+    
+    func makeTranscodeURL(
+        _ url: String,
+        originalCodec: String?
+    ) -> String {
+
+        guard URL(string: url) != nil else {
+            return url
+        }
+
+        /*
+         IMPORTANT:
+         Do not decompose/rebuild `url`.
+
+         SessionToken and other signed query parameters must remain
+         byte-for-byte identical to the original DASH URL.
+        */
+
+        var components = URLComponents()
+
+        components.scheme = "uplayer-audio"
+        components.host = "transcode"
+
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(
+                name: "source",
+                value: url
+            )
+        ]
+
+        if let codec =
+            normalizeAudioCodec(originalCodec) {
+
+            queryItems.append(
+                URLQueryItem(
+                    name: "codec",
+                    value: codec
+                )
+            )
+        }
+
+        components.queryItems = queryItems
+
+        return components.url?
+            .absoluteString ?? url
     }
 }

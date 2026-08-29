@@ -129,6 +129,7 @@ private extension UPlayerAVAssetResourceLoader {
                 let outputData: Data
                 if let audioTranscoder = self.audioTranscoder {
                     outputData = try await audioTranscoder.transcodeAudioSegment(data: sourceData,
+                                                                                 initializationData: <#Data?#>,
                                                                                  originalCodec: originalCodec,
                                                                                  sourceURL: sourceURL)
                 } else {

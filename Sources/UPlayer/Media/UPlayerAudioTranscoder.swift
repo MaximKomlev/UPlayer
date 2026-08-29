@@ -6,59 +6,98 @@
 //
 
 import Foundation
+import UniformTypeIdentifiers
 
 public enum UPlayerSupportedAudioCodecType: String, Codable, CustomStringConvertible {
+
     case aac
     case mp3
     case g711
-    
+
     public var description: String {
         switch self {
         case .aac:
-            "AAC"
+            return "AAC"
+
         case .mp3:
-            "MP3"
+            return "MP3"
+
         case .g711:
-            "g711"
-        default:
-            ""
+            return "g711"
         }
+    }
+}
+
+public struct UPlayerTranscodedAudioSegment {
+
+    public let data: Data
+    public let contentType: String
+
+    public init(data: Data,
+                contentType: String) {
+        self.data = data
+        self.contentType = contentType
     }
 }
 
 public protocol UPlayerAudioTranscoderProtocol: AnyObject {
+
     func transcodeAudioSegment(data: Data,
+                               initializationData: Data?,
                                originalCodec: String?,
-                               sourceURL: URL) async throws -> Data
+                               sourceURL: URL) async throws -> UPlayerTranscodedAudioSegment
 }
 
 public final class UPlayerAudioTranscoderFactory: UPlayerAudioTranscoderProtocol {
-    
+
     private var transcoders = [UPlayerSupportedAudioCodecType: UPlayerAudioTranscoderProtocol]()
-    
+
     public init() {}
-    
-    public func registerTranscoder(_ transcoder: UPlayerAudioTranscoderProtocol, forCodec type: UPlayerSupportedAudioCodecType) {
+
+    public func registerTranscoder(_ transcoder: UPlayerAudioTranscoderProtocol,
+                                   forCodec type: UPlayerSupportedAudioCodecType) {
         transcoders[type] = transcoder
     }
-    
-    public func transcodeAudioSegment(data: Data, originalCodec: String?, sourceURL: URL) async throws -> Data {
-        var targetCodec: UPlayerSupportedAudioCodecType = .aac
-        let originalCodec = originalCodec ?? "g711u"
-        if originalCodec.contains("alaw") ||
-            originalCodec.contains("pcma") ||
-            originalCodec.contains("g711a") ||
-            originalCodec.contains("ulaw") ||
-            originalCodec.contains("mulaw") ||
-            originalCodec.contains("pcmu") ||
-            originalCodec.contains("g711u") {
-            targetCodec = .g711
+
+    public func transcodeAudioSegment(data: Data,
+                                      initializationData: Data?,
+                                      originalCodec: String?,
+                                      sourceURL: URL) async throws -> UPlayerTranscodedAudioSegment {
+
+        let codec = originalCodec?
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? ""
+
+        let requiresG711Transcoding =
+            codec.contains("alaw") ||
+            codec.contains("pcma") ||
+            codec.contains("g711a") ||
+            codec.contains("ulaw") ||
+            codec.contains("mulaw") ||
+            codec.contains("pcmu") ||
+            codec.contains("g711u")
+
+        if requiresG711Transcoding {
+            guard let transcoder = transcoders[.g711] else {
+                // Do NOT return the original G711 data here.
+                //
+                // The generated HLS master advertises AAC-LC,
+                // therefore returning G711 would create a codec mismatch.
+                throw UPlayerErrorsList.aacEncodongFailed8
+            }
+
+            return try await transcoder.transcodeAudioSegment(
+                data: data,
+                initializationData: initializationData,
+                originalCodec: originalCodec,
+                sourceURL: sourceURL
+            )
         }
-        
-        guard let transcoder = transcoders[targetCodec] else {
-            return data
-        }
-        
-        return try await transcoder.transcodeAudioSegment(data: data, originalCodec: originalCodec, sourceURL: sourceURL)
+
+        // Already-supported audio is passed through.
+        return UPlayerTranscodedAudioSegment(data: data,
+                                             contentType: UTType(filenameExtension: "aac")?.identifier
+                                             ?? "public.aac-audio")
     }
 }
