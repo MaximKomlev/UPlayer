@@ -288,24 +288,38 @@ public class UPlayer: UPlayerProtocol {
 
             switch state {
             case .loading:
-                delegate?.didEventPlayerStart(source: self)
+                DispatchQueue.main.async {
+                    self.delegate?.didEventPlayerStart(source: self)
+                }
             case .playing:
                 if oldValue == .paused {
-                    delegate?.didEventPlayerChange(source: self, isPaused: false)
+                    DispatchQueue.main.async {
+                        self.delegate?.didEventPlayerChange(source: self, isPaused: false)
+                    }
                     return
                 }
-                delegate?.didEventPlayerPlay(source: self)
+                DispatchQueue.main.async {
+                    self.delegate?.didEventPlayerPlay(source: self)
+                }
             case .paused:
-                delegate?.didEventPlayerChange(source: self, isPaused: true)
+                DispatchQueue.main.async {
+                    self.delegate?.didEventPlayerChange(source: self, isPaused: true)
+                }
             default:
                 if let error = avPlayer.currentItem?.error {
-                    delegate?.didEventPlayerStop(source: self, error: error)
+                    DispatchQueue.main.async {
+                        self.delegate?.didEventPlayerStop(source: self, error: error)
+                    }
                     return
                 } else if let error = avPlayer.error {
-                    delegate?.didEventPlayerStop(source: self, error: error)
+                    DispatchQueue.main.async {
+                        self.delegate?.didEventPlayerStop(source: self, error: error)
+                    }
                     return
                 }
-                delegate?.didEventPlayerStop(source: self, error: nil)
+                DispatchQueue.main.async {
+                    self.delegate?.didEventPlayerStop(source: self, error: nil)
+                }
             }
         }
     }
@@ -318,7 +332,9 @@ public class UPlayer: UPlayerProtocol {
                 return
             }
             avPlayer.isMuted = newValue
-            delegate?.didEventPlayerChange(source: self, isMuted: newValue)
+            DispatchQueue.main.async {
+                self.delegate?.didEventPlayerChange(source: self, isMuted: newValue)
+            }
         }
     }
     
@@ -332,7 +348,9 @@ public class UPlayer: UPlayerProtocol {
     
     public var currentPlayingTime: TimeInterval = 0.0 {
         didSet {
-            delegate?.didEventPlayerChange(source: self, playingTime: currentPlayingTime)
+            DispatchQueue.main.async {
+                self.delegate?.didEventPlayerChange(source: self, playingTime: self.currentPlayingTime)
+            }
         }
     }
     
