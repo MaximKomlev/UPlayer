@@ -47,7 +47,10 @@ public enum UPlayerPlayerState: Int, CustomStringConvertible {
 }
 
 open class UPlayerView: UIView {
+
     private let playerLayer: AVPlayerLayer
+    private let placeholderImageView = UIImageView()
+    private var readyForDisplayObservation: NSKeyValueObservation?
 
     public override class var layerClass: AnyClass {
         return AVPlayerLayer.self
@@ -57,14 +60,35 @@ open class UPlayerView: UIView {
         get {
             return playerLayer.player
         } set {
+            showPlaceholder()
             playerLayer.player = newValue
         }
     }
-        
-    // original video stream resolution
+
+    // Original video stream resolution
     var videoResolution = CGSize(width: 16.0, height: 9.0) {
         didSet {
             setNeedsLayout()
+        }
+    }
+
+    public var placeholderImage: UIImage? {
+        get {
+            return placeholderImageView.image
+        } set {
+            placeholderImageView.image = newValue
+
+            if newValue == nil {
+                placeholderImageView.isHidden = true
+            }
+        }
+    }
+
+    public var placeholderContentMode: UIView.ContentMode {
+        get {
+            return placeholderImageView.contentMode
+        } set {
+            placeholderImageView.contentMode = newValue
         }
     }
 
@@ -73,35 +97,102 @@ open class UPlayerView: UIView {
     public convenience init() {
         self.init(frame: .zero)
     }
-    
+
     public override init(frame: CGRect) {
         playerLayer = AVPlayerLayer()
+
         super.init(frame: frame)
+
         playerLayer.videoGravity = .resizeAspectFill
+
         layer.addSublayer(playerLayer)
         layer.masksToBounds = true
+
+        setupPlaceholder()
+        observePlayerLayer()
     }
 
     required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        readyForDisplayObservation?.invalidate()
+    }
+
     // MARK: View life cycle
 
     open override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         let viewWidth = bounds.width
         let viewHeight = bounds.height
 
         let playerWidth = viewWidth
         let playerRatio = videoResolution.height / videoResolution.width
         let playerHeight = playerWidth * playerRatio
-        
-        let videoSize = CGSize(width: playerWidth, height: playerHeight)
-        let videoPos = CGPoint(x: (viewWidth - playerWidth) / 2, y: (viewHeight - playerHeight) / 2)
 
-        playerLayer.frame = CGRect(origin: videoPos, size: videoSize)
+        let videoSize = CGSize(width: playerWidth, height: playerHeight)
+        let videoPos = CGPoint(x: (viewWidth - playerWidth) / 2,
+                               y: (viewHeight - playerHeight) / 2)
+
+        let videoFrame = CGRect(origin: videoPos, size: videoSize)
+
+        playerLayer.frame = videoFrame
+        placeholderImageView.frame = videoFrame
+    }
+
+    // MARK: Placeholder
+
+    public func showPlaceholder() {
+        guard placeholderImageView.image != nil else {
+            return
+        }
+
+        placeholderImageView.isHidden = false
+    }
+
+    public func hidePlaceholder(animated: Bool = true) {
+        guard animated else {
+            placeholderImageView.isHidden = true
+            return
+        }
+
+        UIView.animate(withDuration: 0.2,
+                       animations: {
+            self.placeholderImageView.alpha = 0
+        },
+                       completion: { _ in
+            self.placeholderImageView.isHidden = true
+            self.placeholderImageView.alpha = 1
+        })
+    }
+}
+
+private extension UPlayerView {
+
+    func setupPlaceholder() {
+        placeholderImageView.contentMode = .scaleAspectFill
+        placeholderImageView.clipsToBounds = true
+        placeholderImageView.isUserInteractionEnabled = false
+        placeholderImageView.isHidden = true
+
+        addSubview(placeholderImageView)
+    }
+
+    func observePlayerLayer() {
+        readyForDisplayObservation = playerLayer.observe(\.isReadyForDisplay,
+                                                          options: [.initial, .new]) { [weak self] layer, _ in
+            DispatchQueue.main.async {
+                guard let self else {
+                    return
+                }
+
+                if layer.isReadyForDisplay {
+                    self.hidePlaceholder()
+                }
+            }
+        }
     }
 }
 
@@ -271,27 +362,34 @@ public class UPlayer: UPlayerProtocol {
     public func play(url: URL) {
         stop()
 
+        delegate?.playerView?.showPlaceholder()
+
         state = .loading
-        
+
         log("\(logScope) start", loggingLevel: .debug)
-                
+
         if let asset = try? assetCache?.asset(url: url) {
             log("\(logScope) start from persistent cache", loggingLevel: .debug)
+
             startPlayback(asset: asset)
             startPullingLiveMpd(asset: asset)
             return
         }
-        
+
         guard let assetProcessorsQueue else {
             let asset = UPlayerAsset(url: url)
+
             asset.type = .mp4
             asset.httpMetadata = UPlayerAssetHttpData(url: asset.url)
+
             log("\(logScope) start from url", loggingLevel: .debug)
+
             startPlayback(asset: asset)
             return
         }
 
         log("\(logScope) start loading asset", loggingLevel: .debug)
+
         let asset = UPlayerAsset(url: url)
         assetProcessorsQueue.start(asset: asset)
     }
@@ -300,12 +398,19 @@ public class UPlayer: UPlayerProtocol {
         log("\(logScope) stop", loggingLevel: .debug)
 
         refreshTasks.cancelAllOperations()
+
         asset = nil
+
         assetProcessorsQueue?.stop()
+
         avPlayer.currentItem?.cancelPendingSeeks()
         avPlayer.currentItem?.asset.cancelLoading()
+
         avPlayer.pause()
         avPlayer.replaceCurrentItem(with: nil)
+
+        delegate?.playerView?.showPlaceholder()
+
         state = .stopped
     }
     
@@ -483,6 +588,7 @@ extension UPlayer: UPlayerAssetProcessorsQueueDelegate {
             avAsset = AVURLAsset(url: url)
 
             let loader = UPlayerAVAssetResourceLoader()
+            loader.transcoderDelegate = self
             asset.addAssetLoader(loader)
 
             avAsset.resourceLoader.setDelegate(loader, queue: DispatchQueue(label: "resource.loader.queue"))
@@ -532,5 +638,11 @@ extension UPlayer: AVPlayerObserverDelegate {
         DispatchQueue.main.async {
             self.delegate?.didEventPlayerChange(source: self, rate: rate)
         }
+    }
+}
+
+extension UPlayer: UPlayerAVAssetResourceLoaderTranscodingDelegate {
+    public func getAudioTranscoder(source: any UPlayerAVAssetResourceLoaderProtocol) -> (any UPlayerAudioTranscoderProtocol)? {
+        return audioTranscoders
     }
 }

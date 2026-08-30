@@ -104,7 +104,6 @@ public final class UPlayerAACADTSEncoder {
                     let sampleCount = frameCount * channelsInt
 
                     pcm.withUnsafeBufferPointer { pointer in
-
                         guard let source = pointer.baseAddress else {
                             return
                         }
@@ -131,10 +130,8 @@ public final class UPlayerAACADTSEncoder {
             }
 
             switch status {
-
             case .haveData:
                 continue
-
             case .inputRanDry:
                 /*
                  More input may still exist.
@@ -149,13 +146,10 @@ public final class UPlayerAACADTSEncoder {
                  another call to flush delayed AAC output.
                 */
                 continue
-
             case .endOfStream:
                 return output
-
             case .error:
                 throw UPlayerErrorsList.aacEncodongFailed7
-
             @unknown default:
                 return output
             }
@@ -363,21 +357,7 @@ internal func validateADTS(_ data: Data, logScope: String) -> Bool {
         }
 
         let protectionAbsent = bytes[offset + 1] & 0x01
-
-        let profile =
-            (bytes[offset + 2] >> 6) & 0x03
-
-        let frequencyIndex =
-            (bytes[offset + 2] >> 2) & 0x0F
-
-        let channelConfig =
-            ((UInt16(bytes[offset + 2] & 0x01) << 2) |
-             UInt16(bytes[offset + 3] >> 6))
-
-        let frameLength =
-            (Int(bytes[offset + 3] & 0x03) << 11) |
-            (Int(bytes[offset + 4]) << 3) |
-            (Int(bytes[offset + 5] >> 5))
+        let frameLength = (Int(bytes[offset + 3] & 0x03) << 11) | (Int(bytes[offset + 4]) << 3) | (Int(bytes[offset + 5] >> 5))
 
         let headerLength = protectionAbsent == 1 ? 7 : 9
 

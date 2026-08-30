@@ -18,29 +18,37 @@ public enum UPlayerSupportedAudioCodecType: String, Codable, CustomStringConvert
         switch self {
         case .aac:
             return "AAC"
-
         case .mp3:
             return "MP3"
-
         case .g711:
             return "g711"
         }
     }
 }
 
+public enum UPlayerTranscodedAudioFormat {
+    case fragmentedMP4
+    case adts
+}
+
 public struct UPlayerTranscodedAudioSegment {
 
     public let data: Data
     public let contentType: String
+    public let format: UPlayerTranscodedAudioFormat
 
     public init(data: Data,
-                contentType: String) {
+                contentType: String,
+                format: UPlayerTranscodedAudioFormat) {
         self.data = data
         self.contentType = contentType
+        self.format = format
     }
 }
 
 public protocol UPlayerAudioTranscoderProtocol: AnyObject {
+
+    func makeInitializationSegment(originalCodec: String?) async throws -> UPlayerTranscodedAudioSegment?
 
     func transcodeAudioSegment(data: Data,
                                initializationData: Data?,
@@ -50,13 +58,30 @@ public protocol UPlayerAudioTranscoderProtocol: AnyObject {
 
 public final class UPlayerAudioTranscoderFactory: UPlayerAudioTranscoderProtocol {
 
-    private var transcoders = [UPlayerSupportedAudioCodecType: UPlayerAudioTranscoderProtocol]()
+    private var transcoders = [
+        UPlayerSupportedAudioCodecType: UPlayerAudioTranscoderProtocol
+    ]()
 
     public init() {}
 
-    public func registerTranscoder(_ transcoder: UPlayerAudioTranscoderProtocol,
-                                   forCodec type: UPlayerSupportedAudioCodecType) {
+    public func registerTranscoder(_ transcoder: UPlayerAudioTranscoderProtocol, forCodec type: UPlayerSupportedAudioCodecType) {
         transcoders[type] = transcoder
+    }
+
+    public func makeInitializationSegment(originalCodec: String?) async throws -> UPlayerTranscodedAudioSegment? {
+
+        guard let type = codecType(originalCodec) else {
+            return nil
+        }
+
+        guard let transcoder = transcoders[type] else {
+            if type == .g711 {
+                throw UPlayerErrorsList.aacEncodongFailed8
+            }
+            return nil
+        }
+
+        return try await transcoder.makeInitializationSegment(originalCodec: originalCodec)
     }
 
     public func transcodeAudioSegment(data: Data,
@@ -64,40 +89,55 @@ public final class UPlayerAudioTranscoderFactory: UPlayerAudioTranscoderProtocol
                                       originalCodec: String?,
                                       sourceURL: URL) async throws -> UPlayerTranscodedAudioSegment {
 
-        let codec = originalCodec?
-            .lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? ""
+        guard let type = codecType(originalCodec) else {
+            return UPlayerTranscodedAudioSegment(data: data,
+                                                 contentType: "audio/mp4",
+                                                 format: .fragmentedMP4)
+        }
 
-        let requiresG711Transcoding =
-            codec.contains("alaw") ||
+        guard let transcoder = transcoders[type] else {
+            if type == .g711 {
+                throw UPlayerErrorsList.aacEncodongFailed8
+            }
+
+            return UPlayerTranscodedAudioSegment(data: data,
+                                                 contentType: "audio/mp4",
+                                                 format: .fragmentedMP4)
+        }
+
+        return try await transcoder.transcodeAudioSegment(data: data,
+                                                          initializationData: initializationData,
+                                                          originalCodec: originalCodec,
+                                                          sourceURL: sourceURL)
+    }
+}
+
+private extension UPlayerAudioTranscoderFactory {
+    func codecType(_ originalCodec: String?) -> UPlayerSupportedAudioCodecType? {
+
+        let codec = originalCodec?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if codec.contains("alaw") ||
             codec.contains("pcma") ||
             codec.contains("g711a") ||
             codec.contains("ulaw") ||
             codec.contains("mulaw") ||
             codec.contains("pcmu") ||
-            codec.contains("g711u")
+            codec.contains("g711u") {
 
-        if requiresG711Transcoding {
-            guard let transcoder = transcoders[.g711] else {
-                // Do NOT return the original G711 data here.
-                //
-                // The generated HLS master advertises AAC-LC,
-                // therefore returning G711 would create a codec mismatch.
-                throw UPlayerErrorsList.aacEncodongFailed8
-            }
-
-            return try await transcoder.transcodeAudioSegment(
-                data: data,
-                initializationData: initializationData,
-                originalCodec: originalCodec,
-                sourceURL: sourceURL
-            )
+            return .g711
         }
 
-        // Already-supported audio is passed through.
-        return UPlayerTranscodedAudioSegment(data: data,
-                                             contentType: UTType(filenameExtension: "aac")?.identifier
-                                             ?? "public.aac-audio")
+        if codec.hasPrefix("mp4a.") {
+            return .aac
+        }
+
+        return nil
+    }
+}
+
+public extension UPlayerAudioTranscoderProtocol {
+    func makeInitializationSegment(originalCodec: String?) async throws -> UPlayerTranscodedAudioSegment? {
+        nil
     }
 }
