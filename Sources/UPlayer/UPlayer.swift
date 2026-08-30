@@ -139,7 +139,8 @@ open class UPlayerView: UIView {
         let videoFrame = CGRect(origin: videoPos, size: videoSize)
 
         playerLayer.frame = videoFrame
-        placeholderImageView.frame = videoFrame
+        placeholderImageView.bounds = CGRect(origin: .zero, size: videoSize)
+        placeholderImageView.center = CGPoint(x: viewWidth / 2, y: viewHeight / 2)
     }
 
     // MARK: Placeholder
