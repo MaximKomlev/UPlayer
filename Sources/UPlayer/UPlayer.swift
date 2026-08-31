@@ -124,20 +124,29 @@ open class UPlayerView: UIView {
 
     open override func layoutSubviews() {
         super.layoutSubviews()
-
+        
         let viewWidth = bounds.width
         let viewHeight = bounds.height
-
-        let playerWidth = viewWidth
-        let playerRatio = videoResolution.height / videoResolution.width
-        let playerHeight = playerWidth * playerRatio
-
-        let videoSize = CGSize(width: playerWidth, height: playerHeight)
-        let videoPos = CGPoint(x: (viewWidth - playerWidth) / 2,
-                               y: (viewHeight - playerHeight) / 2)
-
-        let videoFrame = CGRect(origin: videoPos, size: videoSize)
-
+        
+        guard videoResolution.width > 0,
+              videoResolution.height > 0,
+              bounds.width > 0,
+              bounds.height > 0 else {
+            return
+        }
+        
+        let widthScale = bounds.width / videoResolution.width
+        let heightScale = bounds.height / videoResolution.height
+        let scale = min(widthScale, heightScale)
+        
+        let videoSize = CGSize(width: videoResolution.width * scale,
+                               height: videoResolution.height * scale)
+        
+        let videoOrigin = CGPoint(x: (bounds.width - videoSize.width) / 2,
+                                  y: (bounds.height - videoSize.height) / 2)
+        
+        let videoFrame = CGRect(origin: videoOrigin, size: videoSize)
+        
         playerLayer.frame = videoFrame
         placeholderImageView.bounds = CGRect(origin: .zero, size: videoSize)
         placeholderImageView.center = CGPoint(x: viewWidth / 2, y: viewHeight / 2)
