@@ -277,6 +277,8 @@ public class UPlayer: UPlayerProtocol {
     private var interceptors = [UPlayerMediaInterceptorType: UPlayerMediaInterceptorProtocol]()
     private let audioTranscoders = UPlayerAudioTranscoderFactory()
     
+    private var playbackRate: Float = 1.0
+    
     // MARK: Constructors/Destructor
     
     public init() {}
@@ -349,9 +351,14 @@ public class UPlayer: UPlayerProtocol {
     
     public var rate: Double {
         get {
-            return Double(avPlayer.rate)
-        } set {
-            avPlayer.rate = Float(newValue)
+            return Double(playbackRate)
+        }
+        set {
+            playbackRate = Float(newValue)
+
+            if avPlayer.rate != 0 {
+                avPlayer.rate = playbackRate
+            }
         }
     }
     
@@ -447,21 +454,23 @@ public class UPlayer: UPlayerProtocol {
     }
     
     public func unpause() {
-        avPlayer.play()
+        avPlayer.playImmediately(atRate: playbackRate)
     }
         
     public func restart() {
         avPlayer.pause()
-        
+
         avPlayer.seek(
             to: .zero,
             toleranceBefore: .zero,
             toleranceAfter: .zero
         ) { [weak self] finished in
-            guard finished else {
+            guard let self,
+                  finished else {
                 return
             }
-            self?.avPlayer.play()
+
+            self.avPlayer.playImmediately(atRate: self.playbackRate)
         }
     }
     
@@ -510,8 +519,8 @@ public class UPlayer: UPlayerProtocol {
                 }
 
                 if state != .playing {
-                    log("\(logScope) started", loggingLevel: .debug)
-                    avPlayer.play()
+                    log("\(logScope) started with rate: \(playbackRate)", loggingLevel: .debug)
+                    avPlayer.playImmediately(atRate: playbackRate)
                 }
             } catch {
                 log("\(logScope) failed, \(error)", loggingLevel: .error)
