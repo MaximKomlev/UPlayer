@@ -243,7 +243,6 @@ public protocol UPlayerProtocol: AnyObject {
     func stop()
     func pause()
     func unpause()
-    func restart()
     
     func seek(_ value: TimeInterval)
     func seek(_ value: TimeInterval, completionHandler: ((Bool) -> ())?)
@@ -454,26 +453,28 @@ public class UPlayer: UPlayerProtocol {
     }
     
     public func unpause() {
+        guard let item = avPlayer.currentItem else {
+            return
+        }
+
+        if isAtEnd(item) {
+            avPlayer.seek(to: .zero,
+                          toleranceBefore: .zero,
+                          toleranceAfter: .zero) { [weak self] finished in
+                guard let self,
+                      finished else {
+                    return
+                }
+
+                self.avPlayer.playImmediately(atRate: self.playbackRate)
+            }
+
+            return
+        }
+
         avPlayer.playImmediately(atRate: playbackRate)
     }
         
-    public func restart() {
-        avPlayer.pause()
-
-        avPlayer.seek(
-            to: .zero,
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
-        ) { [weak self] finished in
-            guard let self,
-                  finished else {
-                return
-            }
-
-            self.avPlayer.playImmediately(atRate: self.playbackRate)
-        }
-    }
-    
     public func seek(_ value: TimeInterval) {
         let time = CMTime(seconds: Double(value), preferredTimescale: 1)
         avPlayer.seek(to: time)
@@ -571,6 +572,22 @@ public class UPlayer: UPlayerProtocol {
         return TimeInterval(seconds)
     }
     
+    private func isAtEnd(_ item: AVPlayerItem) -> Bool {
+        let currentTime = item.currentTime()
+        let duration = item.duration
+
+        guard currentTime.isValid,
+              duration.isValid,
+              duration.isNumeric,
+              duration.seconds.isFinite,
+              duration.seconds > 0 else {
+            return false
+        }
+
+        let remaining = duration.seconds - currentTime.seconds
+
+        return remaining <= 0.1
+    }
 }
 
 extension UPlayer: UPlayerAssetProcessorsQueueDelegate {
