@@ -591,13 +591,13 @@ public class UPlayer: UPlayerProtocol {
 }
 
 extension UPlayer: UPlayerAssetProcessorsQueueDelegate {
-    public func didStartProcessing(source: any UPlayerAssetProcessorsQueueProtocol) {
+    public func didStartProcessing(source: any UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID) {
     }
     
-    public func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, error: (any Error)?) {
+    public func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID, error: (any Error)?) {
     }
     
-    public func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, asset: any UPlayerAssetProtocol) {
+    public func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID, asset: any UPlayerAssetProtocol) {
         log("\(logScope) processing finished", loggingLevel: .debug)
 
         if let existingAsset = self.asset {
@@ -626,18 +626,18 @@ extension UPlayer: UPlayerAssetProcessorsQueueDelegate {
         switch asset.type {
         case .hls, .mp4:
             guard let url = asset.httpMetadata?.url else {
-                throw UPlayerErrorsList.invalidAssetURL
+                throw UPlayerError.invalidAssetURL
             }
             avAsset = AVURLAsset(url: url)
             isPlayable = true
             break
         case .mpd:
             guard let url = modifyURLScheme(asset.url) else {
-                throw UPlayerErrorsList.invalidAssetURL
+                throw UPlayerError.invalidAssetURL
             }
             
             guard let url = convertToUPlayerHLSURL(url) else {
-                throw UPlayerErrorsList.invalidAssetURL
+                throw UPlayerError.invalidAssetURL
             }
             avAsset = AVURLAsset(url: url)
 
@@ -649,12 +649,12 @@ extension UPlayer: UPlayerAssetProcessorsQueueDelegate {
 
             isPlayable = try await avAsset.load(.isPlayable)
         default:
-            throw UPlayerErrorsList.invalidAssetURL
+            throw UPlayerError.invalidAssetURL
         }
         
         
         guard isPlayable else {
-            throw UPlayerErrorsList.invalidAsset
+            throw UPlayerError.invalidAsset
         }
                 
         return AVPlayerItem(asset: avAsset)

@@ -35,7 +35,7 @@ public final class UPlayerThumbnailDownloader: UPlayerAssetProcessorProtocol {
 
         return Future { [weak self] promise in
             guard let self else {
-                promise(.failure(UPlayerErrorsList.nullReference))
+                promise(.failure(UPlayerError.nullReference))
                 return
             }
 
@@ -48,7 +48,7 @@ public final class UPlayerThumbnailDownloader: UPlayerAssetProcessorProtocol {
 
                 do {
                     if self.isTaskCanceled.value {
-                        throw UPlayerErrorsList.operationCanceled
+                        throw UPlayerError.operationCanceled
                     }
 
                     guard let manifest = asset.mpdMetadata?.manifest else {
@@ -85,7 +85,7 @@ public final class UPlayerThumbnailDownloader: UPlayerAssetProcessorProtocol {
 
                     for url in urls {
                         if self.isTaskCanceled.value {
-                            throw UPlayerErrorsList.operationCanceled
+                            throw UPlayerError.operationCanceled
                         }
 
                         let data = try await self.download(url: url)
@@ -277,7 +277,7 @@ private extension UPlayerThumbnailDownloader {
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let http = response as? HTTPURLResponse else {
-            throw UPlayerErrorsList.invalidHTTPResponse
+            throw UPlayerError.invalidHTTPResponse(-1)
         }
         
         guard (200...299).contains(http.statusCode) else {

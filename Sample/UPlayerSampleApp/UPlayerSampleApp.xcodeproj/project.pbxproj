@@ -158,6 +158,7 @@
 				DEVELOPMENT_TEAM = 922J74C2DY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UPlayerSampleApp/Info.plist;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Uplayer requests access to the Photos app to save downloaded content.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -192,6 +193,7 @@
 				DEVELOPMENT_TEAM = 922J74C2DY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UPlayerSampleApp/Info.plist;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Uplayer requests access to the Photos app to save downloaded content.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;

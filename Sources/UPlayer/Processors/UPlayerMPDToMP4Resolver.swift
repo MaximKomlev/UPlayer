@@ -46,7 +46,7 @@ public final class UPlayerMPDToMP4Resolver: UPlayerAssetProcessorProtocol {
         
         return Future { [weak self] promise in
             guard let self else {
-                promise(.failure(UPlayerErrorsList.nullReference))
+                promise(.failure(UPlayerError.nullReference))
                 return
             }
             
@@ -55,12 +55,12 @@ public final class UPlayerMPDToMP4Resolver: UPlayerAssetProcessorProtocol {
             }
             
             if self.isTaskCanceled.value {
-                promise(.failure(UPlayerErrorsList.operationCanceled))
+                promise(.failure(UPlayerError.operationCanceled))
                 return
             }
             
             guard let manifest = asset.mpdMetadata?.manifest else {
-                promise(.failure(UPlayerErrorsList.mpdParseNullData))
+                promise(.failure(UPlayerError.mpdParseNullData))
                 return
             }
             
@@ -71,7 +71,7 @@ public final class UPlayerMPDToMP4Resolver: UPlayerAssetProcessorProtocol {
             }
             
             guard let representation = manifest.bestVideoRepresentation() else {
-                promise(.failure(UPlayerErrorsList.mpdParseError))
+                promise(.failure(UPlayerError.mpdParseError))
                 return
             }
             
@@ -79,7 +79,7 @@ public final class UPlayerMPDToMP4Resolver: UPlayerAssetProcessorProtocol {
                 manifest: manifest,
                 representation: representation
             ) else {
-                promise(.failure(UPlayerErrorsList.mpdParseError))
+                promise(.failure(UPlayerError.mpdParseError))
                 return
             }
             

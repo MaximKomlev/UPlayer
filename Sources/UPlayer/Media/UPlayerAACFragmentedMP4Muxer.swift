@@ -41,7 +41,7 @@ final class UPlayerAACFragmentedMP4Muxer {
                           baseDecodeTime: UInt64) throws -> Data {
 
         guard !encoded.packets.isEmpty else {
-            throw UPlayerErrorsList
+            throw UPlayerError
                 .aacEncodongFailed7
         }
 

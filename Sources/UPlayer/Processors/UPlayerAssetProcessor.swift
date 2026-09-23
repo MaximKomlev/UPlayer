@@ -27,9 +27,9 @@ public protocol UPlayerAssetProcessorProtocol: AnyObject {
 }
 
 public protocol UPlayerAssetProcessorsQueueDelegate: AnyObject {
-    func didStartProcessing(source: UPlayerAssetProcessorsQueueProtocol)
-    func didFinishProcessing(source: UPlayerAssetProcessorsQueueProtocol, error: Error?)
-    func didFinishProcessing(source: UPlayerAssetProcessorsQueueProtocol, asset: UPlayerAssetProtocol)
+    func didStartProcessing(source: UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID)
+    func didFinishProcessing(source: UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID, error: Error?)
+    func didFinishProcessing(source: UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID, asset: UPlayerAssetProtocol)
 }
 
 public protocol UPlayerAssetProcessorsQueueProtocol: AnyObject {
@@ -78,8 +78,8 @@ public final class UPlayerAssetProcessorsQueue: UPlayerAssetProcessorsQueueProto
 
     // MARK: Fields
     
-    private var processorTemplates: [UPlayerAssetProcessorProtocol] = []
-    private var sessions: [UPlayerAssetProcessingID: ProcessingSession] = [:]
+    private var processorTemplates = [UPlayerAssetProcessorProtocol]()
+    private var sessions = [UPlayerAssetProcessingID: ProcessingSession]()
 
     private let lock = NSLock()
 
@@ -117,7 +117,9 @@ public final class UPlayerAssetProcessorsQueue: UPlayerAssetProcessorsQueueProto
         sessions[processingID] = session
         lock.unlock()
 
-        delegate?.didStartProcessing(source: self)
+        defer {
+            delegate?.didStartProcessing(source: self, sessionId: processingID)
+        }
 
         log("\(logScope) started, id: \(processingID), asset: \(asset.url)", loggingLevel: .debug)
 
@@ -147,7 +149,7 @@ public final class UPlayerAssetProcessorsQueue: UPlayerAssetProcessorsQueueProto
                 case .failure(let error):
                     log("\(logScope) failed, id: \(processingID), asset: \(asset.url), error: \(error)", loggingLevel: .error)
 
-                    self.delegate?.didFinishProcessing(source: self, error: error)
+                    self.delegate?.didFinishProcessing(source: self, sessionId: processingID, error: error)
                 }
 
                 self.removeSession(id: processingID)
@@ -158,7 +160,7 @@ public final class UPlayerAssetProcessorsQueue: UPlayerAssetProcessorsQueueProto
 
                 log("\(logScope) end, id: \(processingID), asset: \(finalAsset.url)", loggingLevel: .debug)
 
-                self.delegate?.didFinishProcessing(source: self, asset: finalAsset)
+                self.delegate?.didFinishProcessing(source: self, sessionId: processingID, asset: finalAsset)
             }
         )
 

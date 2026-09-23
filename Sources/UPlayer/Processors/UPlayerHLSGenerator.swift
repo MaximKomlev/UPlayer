@@ -59,7 +59,7 @@ public final class UPlayerHLSGenerator: UPlayerAssetProcessorProtocol {
         return Future { [weak self] promise in
             do {
                 guard let self else {
-                    throw UPlayerErrorsList.nullReference
+                    throw UPlayerError.nullReference
                 }
                 
                 defer {
@@ -67,11 +67,11 @@ public final class UPlayerHLSGenerator: UPlayerAssetProcessorProtocol {
                 }
                 
                 if self.isTaskCanceled.value {
-                    throw UPlayerErrorsList.operationCanceled
+                    throw UPlayerError.operationCanceled
                 }
                 
                 guard let manifest = asset.mpdMetadata?.manifest else {
-                    throw UPlayerErrorsList.mpdParseNullData
+                    throw UPlayerError.mpdParseNullData
                 }
                 
                 var mediaPlaylists = self.generateMediaPlaylists(manifest: manifest)

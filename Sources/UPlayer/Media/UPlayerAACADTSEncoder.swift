@@ -25,14 +25,14 @@ public final class UPlayerAACADTSEncoder {
         }
 
         guard pcm.count % Int(channels) == 0 else {
-            throw UPlayerErrorsList.aacEncodongFailed1
+            throw UPlayerError.aacEncodongFailed1
         }
 
         guard let inputFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                               sampleRate: sourceSampleRate,
                                               channels: channels,
                                               interleaved: true) else {
-            throw UPlayerErrorsList.aacEncodongFailed1
+            throw UPlayerError.aacEncodongFailed1
         }
 
         let outputSettings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -42,11 +42,11 @@ public final class UPlayerAACADTSEncoder {
         ]
 
         guard let outputFormat = AVAudioFormat(settings: outputSettings) else {
-            throw UPlayerErrorsList.aacEncodongFailed2
+            throw UPlayerError.aacEncodongFailed2
         }
 
         guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
-            throw UPlayerErrorsList.aacEncodongFailed3
+            throw UPlayerError.aacEncodongFailed3
         }
 
         converter.bitRate = Int(bitrate)
@@ -149,7 +149,7 @@ public final class UPlayerAACADTSEncoder {
             case .endOfStream:
                 return output
             case .error:
-                throw UPlayerErrorsList.aacEncodongFailed7
+                throw UPlayerError.aacEncodongFailed7
             @unknown default:
                 return output
             }
@@ -210,7 +210,7 @@ private extension UPlayerAACADTSEncoder {
                 guard packetOffset >= 0,
                       packetSize > 0,
                       packetOffset + packetSize <= totalByteLength else {
-                    throw UPlayerErrorsList.aacEncodongFailed7
+                    throw UPlayerError.aacEncodongFailed7
                 }
 
                 appendADTSPacket(bytes: baseAddress.advanced(by: packetOffset), size: packetSize, format: format, output: &output)
@@ -238,7 +238,7 @@ private extension UPlayerAACADTSEncoder {
         guard bytesPerPacket > 0,
               bytesPerPacket * packetCount <= totalByteLength else {
 
-            throw UPlayerErrorsList.aacEncodongFailed7
+            throw UPlayerError.aacEncodongFailed7
         }
 
         for index in 0 ..< packetCount {

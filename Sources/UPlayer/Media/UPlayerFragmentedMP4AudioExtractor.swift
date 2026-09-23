@@ -53,18 +53,18 @@ final class UPlayerFragmentedMP4AudioExtractor {
         let boxes = try parseBoxes(fragmentData, in: 0 ..< fragmentData.count)
 
         guard let moof = boxes.first(where: { $0.type == "moof" }) else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         guard let mdat = boxes.first(where: { $0.type == "mdat" && $0.range.lowerBound >= moof.range.lowerBound }) else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         let moofChildren = try parseBoxes(fragmentData,
                                           in: moof.payloadRange)
 
         guard let traf = moofChildren.first(where: { $0.type == "traf" }) else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         let baseDecodeTime = try parseTFDT(traf: traf, data: fragmentData)
@@ -74,14 +74,14 @@ final class UPlayerFragmentedMP4AudioExtractor {
 
         guard !trun.sampleSizes.isEmpty else {
             // Do not assume entire mdat == one audio sample.
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         let baseDataOffset: Int
 
         if let explicitBase = tfhd.baseDataOffset {
             guard explicitBase <= UInt64(Int.max) else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
             baseDataOffset = Int(explicitBase)
         } else if tfhd.defaultBaseIsMoof {
@@ -104,7 +104,7 @@ final class UPlayerFragmentedMP4AudioExtractor {
 
             guard calculated >= 0,
                   calculated <= Int64(Int.max) else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             sampleDataStart = Int(calculated)
@@ -119,7 +119,7 @@ final class UPlayerFragmentedMP4AudioExtractor {
 
             guard size >= 0,
                   partial <= Int.max - size else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             return partial + size
@@ -128,7 +128,7 @@ final class UPlayerFragmentedMP4AudioExtractor {
         guard sampleDataStart >= mdat.payloadRange.lowerBound,
               sampleDataStart <= mdat.payloadRange.upperBound,
               sampleDataStart + totalSampleBytes <= mdat.payloadRange.upperBound else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         var samples: [Data] = []
@@ -139,7 +139,7 @@ final class UPlayerFragmentedMP4AudioExtractor {
         for size in trun.sampleSizes {
             guard size > 0,
                   offset + size <= fragmentData.count else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             samples.append(fragmentData.subdata(in: offset ..< offset + size))
@@ -157,7 +157,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
         guard range.lowerBound >= 0,
               range.upperBound <= data.count else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         var result: [UPlayerMP4Box] = []
@@ -169,7 +169,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
             let typeRange = offset + 4 ..< offset + 8
 
             guard let type = String(data: data.subdata(in: typeRange), encoding: .ascii) else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             var headerSize = 8
@@ -182,7 +182,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
             case 1:
                 guard offset + 16 <= range.upperBound else {
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
 
                 boxSize = readUInt64(data, offset: offset + 8)
@@ -195,13 +195,13 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
             guard boxSize >= UInt64(headerSize),
                   boxSize <= UInt64(Int.max) else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             let end = offset + Int(boxSize)
 
             guard end <= range.upperBound else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             result.append(UPlayerMP4Box(type: type, range: offset ..< end, payloadRange: offset + headerSize ..< end))
@@ -234,7 +234,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
         let children = try parseBoxes(data, in: traf.payloadRange)
 
         guard let tfhd = children.first(where: { $0.type == "tfhd" }) else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         // FullBox:
@@ -243,7 +243,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
         // track_ID   4 bytes
 
         guard tfhd.payloadRange.count >= 8 else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         let start = tfhd.payloadRange.lowerBound
@@ -266,7 +266,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
         if baseDataOffsetPresent {
             guard offset + 8 <= tfhd.payloadRange.upperBound else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             baseDataOffset = readUInt64(data, offset: offset)
@@ -276,7 +276,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
         if sampleDescriptionIndexPresent {
             guard offset + 4 <= tfhd.payloadRange.upperBound else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             offset += 4
@@ -284,7 +284,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
         if defaultSampleDurationPresent {
             guard offset + 4 <= tfhd.payloadRange.upperBound else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             offset += 4
@@ -293,7 +293,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
         if defaultSampleSizePresent {
 
             guard offset + 4 <= tfhd.payloadRange.upperBound else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             defaultSampleSize = Int(readUInt32(data, offset: offset))
@@ -303,7 +303,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
         if defaultSampleFlagsPresent {
             guard offset + 4 <= tfhd.payloadRange.upperBound else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             offset += 4
@@ -324,11 +324,11 @@ private extension UPlayerFragmentedMP4AudioExtractor {
         let children = try parseBoxes(data, in: traf.payloadRange)
 
         guard let trun = children.first(where: { $0.type == "trun" }) else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         guard trun.payloadRange.count >= 8 else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         let start = trun.payloadRange.lowerBound
@@ -340,7 +340,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
         let sampleCount = Int(readUInt32(data, offset: start + 4))
 
         guard sampleCount > 0 else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         var offset = start + 8
@@ -356,7 +356,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
         if dataOffsetPresent {
             guard offset + 4 <= trun.payloadRange.upperBound else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             dataOffset = Int32(bitPattern: readUInt32(data, offset: offset))
@@ -366,7 +366,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
         if firstSampleFlagsPresent {
             guard offset + 4 <= trun.payloadRange.upperBound else {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             offset += 4
@@ -378,7 +378,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
         for _ in 0 ..< sampleCount {
             if sampleDurationPresent {
                 guard offset + 4 <= trun.payloadRange.upperBound else {
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
 
                 offset += 4
@@ -386,13 +386,13 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
             if sampleSizePresent {
                 guard offset + 4 <= trun.payloadRange.upperBound else {
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
 
                 let size = Int(readUInt32(data, offset: offset))
 
                 guard size > 0 else {
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
 
                 sizes.append(size)
@@ -403,7 +403,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
                 guard let defaultSampleSize,
                       defaultSampleSize > 0 else {
 
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
 
                 sizes.append(defaultSampleSize)
@@ -411,7 +411,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
             if sampleFlagsPresent {
                 guard offset + 4 <= trun.payloadRange.upperBound else {
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
 
                 offset += 4
@@ -419,7 +419,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
             if compositionTimePresent {
                 guard offset + 4 <= trun.payloadRange.upperBound else {
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
 
                 offset += 4
@@ -444,7 +444,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
         }
 
         guard tfdt.payloadRange.count >= 8 else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         let start =
@@ -462,7 +462,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
                     tfdt.payloadRange
                         .upperBound else {
 
-                throw UPlayerErrorsList
+                throw UPlayerError
                     .aacEncodongFailed8
             }
 
@@ -480,7 +480,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
                     tfdt.payloadRange
                         .upperBound else {
 
-                throw UPlayerErrorsList
+                throw UPlayerError
                     .aacEncodongFailed8
             }
 
@@ -492,7 +492,7 @@ private extension UPlayerFragmentedMP4AudioExtractor {
 
         default:
 
-            throw UPlayerErrorsList
+            throw UPlayerError
                 .aacEncodongFailed8
         }
     }

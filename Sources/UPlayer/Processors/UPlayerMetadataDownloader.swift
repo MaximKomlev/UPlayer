@@ -86,7 +86,7 @@ private let logScope = "[mpd downloading]"
         return detectMediaTypeWithRange(asset: asset)
             .flatMap { [weak self] asset -> AnyPublisher<UPlayerAssetProtocol, Error> in
                 guard let self else {
-                    let error = UPlayerErrorsList.nullReference
+                    let error = UPlayerError.nullReference
                     log("\(logScope) failed, \(error), url: \(asset.url)", loggingLevel: .error)
                     return Fail(error: error).eraseToAnyPublisher()
                 }
@@ -118,14 +118,14 @@ private let logScope = "[mpd downloading]"
         Future { [weak self] promise in
             
             guard let self else {
-                let error = UPlayerErrorsList.nullReference
+                let error = UPlayerError.nullReference
                 log("\(logScope) failed, \(error)", loggingLevel: .error)
                 promise(.failure(error))
                 return
             }
             
             if self.isTaskCanceled.value {
-                let error = UPlayerErrorsList.operationCanceled
+                let error = UPlayerError.operationCanceled
                 log("\(logScope) failed, \(error)", loggingLevel: .error)
                 promise(.failure(error))
                 return
@@ -142,14 +142,14 @@ private let logScope = "[mpd downloading]"
                 }
        
                 if self.isTaskCanceled.value {
-                    let error = UPlayerErrorsList.operationCanceled
+                    let error = UPlayerError.operationCanceled
                     log("\(logScope) failed, \(error)", loggingLevel: .error)
                     promise(.failure(error))
                     return
                 }
 
                 guard let http = response as? HTTPURLResponse else {
-                    let error = UPlayerErrorsList.invalidHTTPResponse
+                    let error = UPlayerError.invalidHTTPResponse(-1)
                     log("\(logScope) failed, \(error)", loggingLevel: .error)
                     promise(.failure(error))
                     return
@@ -206,7 +206,7 @@ private let logScope = "[mpd downloading]"
         case .mpd:
             break
         default:
-            let error = UPlayerErrorsList.unexpectedMimeTypeResponse
+            let error = UPlayerError.unexpectedMimeTypeResponse
             log("\(logScope) failed, \(error)", loggingLevel: .error)
             return Fail(error: error).eraseToAnyPublisher()
         }
@@ -214,14 +214,14 @@ private let logScope = "[mpd downloading]"
         return Future { [weak self] promise in
             
             guard let self else {
-                let error = UPlayerErrorsList.nullReference
+                let error = UPlayerError.nullReference
                 log("\(logScope) failed, \(error)", loggingLevel: .error)
                 promise(.failure(error))
                 return
             }
             
             if self.isTaskCanceled.value {
-                let error = UPlayerErrorsList.operationCanceled
+                let error = UPlayerError.operationCanceled
                 log("\(logScope) failed, \(error)", loggingLevel: .error)
                 promise(.failure(error))
                 return
@@ -232,7 +232,7 @@ private let logScope = "[mpd downloading]"
             let task = session.dataTask(with: asset.url) { data, response, error in
                 
                 if self.isTaskCanceled.value {
-                    let error = UPlayerErrorsList.operationCanceled
+                    let error = UPlayerError.operationCanceled
                     log("\(logScope) failed, \(error)", loggingLevel: .error)
                     promise(.failure(error))
                     return
@@ -247,7 +247,7 @@ private let logScope = "[mpd downloading]"
                       (200...299).contains(http.statusCode),
                       let data = data else {
                     
-                    let error = UPlayerErrorsList.invalidHTTPResponse
+                    let error = UPlayerError.invalidHTTPResponse(-1)
                     log("\(logScope) failed, \(error)", loggingLevel: .error)
                     promise(.failure(error))
                     return

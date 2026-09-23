@@ -11,6 +11,7 @@ import Foundation
 public enum SourceViewControllerModelType {
     case play
     case preprocess
+    case download
 }
 
 public struct SourceViewControllerModel {

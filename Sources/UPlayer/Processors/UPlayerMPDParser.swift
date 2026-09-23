@@ -223,7 +223,7 @@ public final class UPlayerMPDParser: NSObject, UPlayerAssetProcessorProtocol {
         return Future { [weak self] promise in
             do {
                 guard let self else {
-                    throw UPlayerErrorsList.nullReference
+                    throw UPlayerError.nullReference
                 }
                 
                 defer {
@@ -231,11 +231,11 @@ public final class UPlayerMPDParser: NSObject, UPlayerAssetProcessorProtocol {
                 }
                 
                 if self.isTaskCanceled.value {
-                    throw UPlayerErrorsList.operationCanceled
+                    throw UPlayerError.operationCanceled
                 }
                 
                 guard let data = asset.mpdMetadata?.rawData else {
-                    throw UPlayerErrorsList.mpdParseNullData
+                    throw UPlayerError.mpdParseNullData
                 }
                 
                 let rootMPDURL = asset.url
@@ -245,7 +245,7 @@ public final class UPlayerMPDParser: NSObject, UPlayerAssetProcessorProtocol {
                 parser.delegate = self
                 
                 guard parser.parse(), let manifest = self.manifest else {
-                    throw UPlayerErrorsList.mpdParseError
+                    throw UPlayerError.mpdParseError
                 }
                 
                 log("\(logScope) succeed, url: \(asset.url)", loggingLevel: .debug)

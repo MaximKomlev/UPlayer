@@ -59,7 +59,7 @@ public class UPlayerAssetCache: UPlayerAssetCacheProtocol {
         }
 
         guard let asset = assets[url] else {
-            throw UPlayerErrorsList.assetNotFoundError
+            throw UPlayerError.assetNotFoundError
         }
         
         return asset

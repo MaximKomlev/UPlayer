@@ -76,7 +76,7 @@ public final class UPlayerAudioTranscoderFactory: UPlayerAudioTranscoderProtocol
 
         guard let transcoder = transcoders[type] else {
             if type == .g711 {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
             return nil
         }
@@ -97,7 +97,7 @@ public final class UPlayerAudioTranscoderFactory: UPlayerAudioTranscoderProtocol
 
         guard let transcoder = transcoders[type] else {
             if type == .g711 {
-                throw UPlayerErrorsList.aacEncodongFailed8
+                throw UPlayerError.aacEncodongFailed8
             }
 
             return UPlayerTranscodedAudioSegment(data: data,

@@ -50,7 +50,7 @@ public final class UPlayerSegmentBaseHLSGenerator: UPlayerAssetProcessorProtocol
 
         return Future { [weak self] promise in
             guard let self else {
-                promise(.failure(UPlayerErrorsList.nullReference))
+                promise(.failure(UPlayerError.nullReference))
                 return
             }
 
@@ -63,11 +63,11 @@ public final class UPlayerSegmentBaseHLSGenerator: UPlayerAssetProcessorProtocol
 
                 do {
                     if self.isTaskCanceled.value {
-                        throw UPlayerErrorsList.operationCanceled
+                        throw UPlayerError.operationCanceled
                     }
 
                     guard let manifest = asset.mpdMetadata?.manifest else {
-                        throw UPlayerErrorsList.mpdParseNullData
+                        throw UPlayerError.mpdParseNullData
                     }
 
                     guard manifest.containsSegmentBaseMedia() else {
@@ -129,7 +129,7 @@ private extension UPlayerSegmentBaseHLSGenerator {
                     guard representation.segmentBase != nil else { continue }
                     
                     if isTaskCanceled.value {
-                        throw UPlayerErrorsList.operationCanceled
+                        throw UPlayerError.operationCanceled
                     }
                     
                     guard let playlist = try await generate(manifest: manifest,

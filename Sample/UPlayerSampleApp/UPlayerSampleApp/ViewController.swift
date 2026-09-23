@@ -19,6 +19,8 @@ class ViewController: UIViewController {
     private let preview = UIImageView()
     private let assetCache = UPlayerAssetCache()
     private let mpdProcessors = UPlayerAssetProcessorsQueue()
+    private let mpdDownloadProcessors = UPlayerAssetProcessorsQueue()
+    private var downloadSessions = Set<UPlayerAssetProcessingID>()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -96,6 +98,10 @@ class ViewController: UIViewController {
         mpdProcessors.add(processor: UPlayerMPDToMP4Resolver(id: "MPDToMP4ResolverAssetProcessor"))
         mpdProcessors.add(processor: UPlayerHLSGenerator(id: "hlsGeneratorAssetProcessor"))
         mpdProcessors.delegate = self
+        
+        mpdDownloadProcessors.add(processor: UPlayerMetadataDownloader(id: "downloadAssetProcessor"))
+        mpdDownloadProcessors.add(processor: UPlayerMPDParser(id: "mpdParserAssetProcessor"))
+        mpdDownloadProcessors.delegate = self
     }
             
     @objc private func rightNavBarButtonAction(sender: UIBarButtonItem) {
@@ -124,6 +130,11 @@ class ViewController: UIViewController {
                                            subtitle: "Preprocess five urls simultaneously",
                                            url: URL(string: "https://localhost"),
                                            type: .preprocess),
+
+            SourceViewControllerModel.Item(title: "Download",
+                                           subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
+                                           url: URL(string: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_multiple_tiled_thumbnails.mpd"),
+                                           type: .download),
 
             SourceViewControllerModel.Item(title: "Live",
                                            subtitle: "DASH-IF LiveSim, 2-second segments",
@@ -219,6 +230,12 @@ class ViewController: UIViewController {
         }
     }
     
+    private func download(url: URL) {
+        let asset = UPlayerAsset(url: url)
+        let sessionId = mpdDownloadProcessors.start(asset: asset)
+        downloadSessions.insert(sessionId)
+    }
+    
     // MARK: Events handlers
     
     @objc private func scrubberChanged(_ slider: UISlider) {
@@ -286,17 +303,43 @@ extension ViewController: UPlayerDelegate {
 }
 
 extension ViewController: UPlayerAssetProcessorsQueueDelegate {
-    func didStartProcessing(source: any UPlayerAssetProcessorsQueueProtocol) {
+    func didStartProcessing(source: any UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID) {
     }
     
-    func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, error: (any Error)?) {
+    func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID, error: (any Error)?) {
     }
     
-    func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, asset: any UPlayerAssetProtocol) {
+    func didFinishProcessing(source: any UPlayerAssetProcessorsQueueProtocol, sessionId: UPlayerAssetProcessingID, asset: any UPlayerAssetProtocol) {
+
         if asset.mpdMetadata?.manifestType == .dynamicLive {
             return
         }
-        assetCache.addAsset(asset)
+
+        if !downloadSessions.contains(sessionId) {
+            assetCache.addAsset(asset)
+            return
+        }
+        
+        downloadSessions.remove(sessionId)
+        Task {
+            let exporter = UPlayerMediaExporter()
+            
+            exporter.progressHandler = { progress in
+                print("Export: \(Int(progress * 100))%")
+            }
+            
+            let outputURL = FileManager.default
+                .temporaryDirectory
+                .appendingPathComponent("recording.mp4")
+            
+            do {
+                try await exporter.exportToPhotoLibrary(asset: asset)
+                
+                print("Saved:", asset.url)
+            } catch {
+                print("Export failed:", error)
+            }
+        }
     }
 }
 
@@ -315,9 +358,10 @@ extension ViewController: SourceViewControllerDelegate {
         switch item.type {
         case .play:
             player.play(url: url)
-
         case .preprocess:
             preProcessing()
+        case .download:
+            download(url: url)
         }
     }
     

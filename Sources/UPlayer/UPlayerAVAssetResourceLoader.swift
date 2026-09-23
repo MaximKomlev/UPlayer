@@ -40,7 +40,7 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
     public func resourceLoader(_ resourceLoader: AVAssetResourceLoader, shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
         
         guard let url = loadingRequest.request.url else {
-            loadingRequest.finishLoading(with: UPlayerErrorsList.assetLoadingFailed)
+            loadingRequest.finishLoading(with: UPlayerError.assetLoadingFailed)
             return true
         }
         
@@ -112,7 +112,7 @@ extension UPlayerAVAssetResourceLoader {
             do {
                 let cacheKey = "init|\(originalCodec(from: url) ?? "")" as NSString
                 guard let realURL = originalHTTPURL(from: url) else {
-                    throw UPlayerErrorsList.assetLoadingFailed
+                    throw UPlayerError.assetLoadingFailed
                 }
                 
                 if let cached = transcodedCache.object(forKey: cacheKey) {
@@ -124,16 +124,16 @@ extension UPlayerAVAssetResourceLoader {
                 }
                 
                 guard let transcoder = transcoderDelegate?.getAudioTranscoder(source: self) else {
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
                 
                 let codec = originalCodec(from: url)
                 guard let result = try await transcoder.makeInitializationSegment(originalCodec: codec) else {
-                    throw UPlayerErrorsList.aacEncodongFailed7
+                    throw UPlayerError.aacEncodongFailed7
                 }
                 
                 guard result.format == .fragmentedMP4, !result.data.isEmpty else {
-                    throw UPlayerErrorsList.aacEncodongFailed7
+                    throw UPlayerError.aacEncodongFailed7
                 }
                 
                 log("\(logScope) AAC init generated codec=\(codec ?? "unknown") bytes=\(result.data.count) format=\(result.format) contentType=\(result.contentType)",
@@ -165,7 +165,7 @@ extension UPlayerAVAssetResourceLoader {
             
             do {
                 guard let sourceURL = originalHTTPURL(from: url) else {
-                    throw UPlayerErrorsList.assetLoadingFailed
+                    throw UPlayerError.assetLoadingFailed
                 }
             
                 let cacheKey = url.absoluteString as NSString
@@ -180,7 +180,7 @@ extension UPlayerAVAssetResourceLoader {
                 }
                 
                 guard let transcoder = transcoderDelegate?.getAudioTranscoder(source: self) else {
-                    throw UPlayerErrorsList.aacEncodongFailed8
+                    throw UPlayerError.aacEncodongFailed8
                 }
                 
                 let codec = originalCodec(from: url)
@@ -193,7 +193,7 @@ extension UPlayerAVAssetResourceLoader {
                                                                         originalCodec: codec,
                                                                         sourceURL: sourceURL)
                 guard result.format == .fragmentedMP4, !result.data.isEmpty else {
-                    throw UPlayerErrorsList.aacEncodongFailed7
+                    throw UPlayerError.aacEncodongFailed7
                 }
                 
                 dumpTopLevelMP4Boxes(result.data,
@@ -230,12 +230,12 @@ extension UPlayerAVAssetResourceLoader {
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let http = response as? HTTPURLResponse else {
-            throw UPlayerErrorsList.invalidHTTPResponse
+            throw UPlayerError.invalidHTTPResponse(-1)
         }
         
         guard (200...299).contains(http.statusCode) else {
             log("\(logScope) HTTP \(http.statusCode), \(url)", loggingLevel: .error)
-            throw UPlayerErrorsList.invalidHTTPResponse
+            throw UPlayerError.invalidHTTPResponse(-1)
         }
         
         log("""
@@ -254,7 +254,7 @@ extension UPlayerAVAssetResourceLoader {
     fileprivate func handlePlaylist(url: URL, loadingRequest: AVAssetResourceLoadingRequest) {
         guard let playlist = dataDelegate?.getPlaylist(source: self, url: url),
             let data = playlist.data(using: .utf8) else {
-            loadingRequest.finishLoading(with: UPlayerErrorsList.assetLoadingFailed)
+            loadingRequest.finishLoading(with: UPlayerError.assetLoadingFailed)
             return
         }
         
@@ -304,7 +304,7 @@ extension UPlayerAVAssetResourceLoader {
         
         guard start >= 0,
             start <= data.count else {
-            loadingRequest.finishLoading(with:UPlayerErrorsList.assetLoadingFailed)
+            loadingRequest.finishLoading(with:UPlayerError.assetLoadingFailed)
             return
         }
         

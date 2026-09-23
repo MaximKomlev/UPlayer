@@ -50,14 +50,14 @@ public final class UPlayerAACEncoder {
         }
 
         guard pcm.count % Int(channels) == 0 else {
-            throw UPlayerErrorsList.aacEncodongFailed1
+            throw UPlayerError.aacEncodongFailed1
         }
 
         guard let inputFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                               sampleRate: sourceSampleRate,
                                               channels: channels,
                                               interleaved: true) else {
-            throw UPlayerErrorsList.aacEncodongFailed1
+            throw UPlayerError.aacEncodongFailed1
         }
 
         let outputSettings: [String: Any] = [
@@ -68,11 +68,11 @@ public final class UPlayerAACEncoder {
         ]
 
         guard let outputFormat = AVAudioFormat(settings: outputSettings) else {
-            throw UPlayerErrorsList.aacEncodongFailed2
+            throw UPlayerError.aacEncodongFailed2
         }
 
         guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
-            throw UPlayerErrorsList.aacEncodongFailed3
+            throw UPlayerError.aacEncodongFailed3
         }
 
         log(
@@ -189,7 +189,7 @@ public final class UPlayerAACEncoder {
             case .inputRanDry:
                 consecutiveInputRanDryCount += 1
                 guard consecutiveInputRanDryCount < 16 else {
-                    throw UPlayerErrorsList.aacEncodongFailed7
+                    throw UPlayerError.aacEncodongFailed7
                 }
                 continue
             case .endOfStream:
@@ -198,9 +198,9 @@ public final class UPlayerAACEncoder {
                                               channels: channels,
                                               framesPerPacket: outputFramesPerPacket)
             case .error:
-                throw UPlayerErrorsList.aacEncodongFailed7
+                throw UPlayerError.aacEncodongFailed7
             @unknown default:
-                throw UPlayerErrorsList.aacEncodongFailed7
+                throw UPlayerError.aacEncodongFailed7
             }
         }
     }
@@ -222,8 +222,9 @@ private extension UPlayerAACEncoder {
         let baseAddress = buffer.data
         guard let descriptions = buffer.packetDescriptions else {
             guard packetCount == 1 else {
-                throw UPlayerErrorsList.aacEncodongFailed7
+                throw UPlayerError.aacEncodongFailed7
             }
+
 
             packets.append(UPlayerAACPacket(data: Data(bytes: baseAddress,
                                                        count: byteLength), duration: defaultFramesPerPacket))
@@ -240,7 +241,7 @@ private extension UPlayerAACEncoder {
             guard offset >= 0,
                   size > 0,
                   offset + size <= byteLength else {
-                throw UPlayerErrorsList.aacEncodongFailed7
+                throw UPlayerError.aacEncodongFailed7
             }
 
             let packetData = Data(bytes: baseAddress.advanced(by: offset), count: size)

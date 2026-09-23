@@ -64,7 +64,7 @@ public final class UPlayerG711ToAACTranscoder: UPlayerAudioTranscoderProtocol {
                                                      fragmentData: data)
 
         guard !extracted.samples.isEmpty else {
-            throw UPlayerErrorsList
+            throw UPlayerError
                 .aacEncodongFailed8
         }
 
@@ -80,7 +80,7 @@ public final class UPlayerG711ToAACTranscoder: UPlayerAudioTranscoderProtocol {
         }
 
         guard !pcm.isEmpty else {
-            throw UPlayerErrorsList.aacEncodongFailed8
+            throw UPlayerError.aacEncodongFailed8
         }
 
         log(
@@ -113,7 +113,7 @@ public final class UPlayerG711ToAACTranscoder: UPlayerAudioTranscoderProtocol {
         )
         
         guard !encoded.packets.isEmpty else {
-            throw UPlayerErrorsList
+            throw UPlayerError
                 .aacEncodongFailed7
         }
 
@@ -192,7 +192,7 @@ private extension UPlayerG711ToAACTranscoder {
             return .ulaw
         }
 
-        throw UPlayerErrorsList.aacEncodongFailed8
+        throw UPlayerError.aacEncodongFailed8
     }
 }
 
