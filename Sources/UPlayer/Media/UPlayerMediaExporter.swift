@@ -1,5 +1,5 @@
 //
-//  UPlayerAudioTranscoder.swift
+//  UPlayerMediaExporter.swift
 //  UPlayer
 //
 //  Created by Max Komleu on 9/23/26.
