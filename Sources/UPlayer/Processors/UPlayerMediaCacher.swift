@@ -287,9 +287,8 @@ private extension UPlayerMediaCacher {
     func cacheVideoPlaylist(_ playlist: String,
                             playlistKey: String,
                             directory: URL) async throws -> String {
-        // SegmentTemplate/fMP4 playlists use one URL per complete segment. Cache
-        // those files concurrently. SegmentBase playlists use EXT-X-BYTERANGE and
-        // stay on the sequential path below so implicit offsets remain correct.
+        // SegmentTemplate playlists already point at complete init/media objects.
+        // Download those objects directly and concurrently.
         if !playlist.contains("#EXT-X-BYTERANGE:") &&
             !playlist.contains("BYTERANGE=") {
             return try await cacheWholeSegmentPlaylist(playlist,
@@ -297,92 +296,202 @@ private extension UPlayerMediaCacher {
                                                        directory: directory)
         }
 
-        let lines = playlist.components(separatedBy: .newlines)
-        var output = [String]()
-        output.reserveCapacity(lines.count)
+        // SegmentBase playlists point many byte ranges at the same MP4. Do not
+        // issue one HTTP Range request per HLS segment. Download each unique
+        // source object once, then extract the requested init/media ranges locally.
+        return try await cacheByteRangePlaylistFromWholeResources(playlist,
+                                                                  playlistKey: playlistKey,
+                                                                  directory: directory)
+    }
 
+    func cacheByteRangePlaylistFromWholeResources(_ playlist: String,
+                                                   playlistKey: String,
+                                                   directory: URL) async throws -> String {
+        struct RangeJob {
+            let lineIndex: Int
+            let sourceURL: URL
+            let range: ByteRange
+            let preferredName: String
+            let index: Int
+            let isInitialization: Bool
+        }
+
+        var output = playlist.components(separatedBy: .newlines)
+        var jobs = [RangeJob]()
         var pendingByteRange: ByteRange?
         var previousRangeEndByURL = [String: Int64]()
         var segmentIndex = 0
 
-        for rawLine in lines {
+        for lineIndex in output.indices {
             try checkCancellation()
+            let line = output[lineIndex].trimmingCharacters(in: .whitespacesAndNewlines)
 
-            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if line.hasPrefix("#EXT-X-MAP:") {
-                guard let uri = attribute(named: "URI", in: line),
-                      let sourceURL = URL(string: uri) else {
-                    output.append(rawLine)
-                    continue
-                }
-
-                let byteRange = attribute(named: "BYTERANGE", in: line)
-                    .flatMap { parseByteRange($0, previousEnd: nil) }
-
-                let localURL = try await cache(resource: Resource(url: sourceURL,
-                                                                  byteRange: byteRange),
-                                               preferredName: "init",
-                                               index: 0,
-                                               directory: directory)
-
-                // The cached file contains exactly the requested initialization bytes,
-                // so BYTERANGE must not remain in the rewritten playlist.
-                let playbackURL = cachedPlaybackURL(sourceURL: sourceURL, localURL: localURL, mode: "video-init")
-                output.append("#EXT-X-MAP:URI=\"\(playbackURL.absoluteString)\"")
+            if line.hasPrefix("#EXT-X-MAP:"),
+               let uri = attribute(named: "URI", in: line),
+               let sourceURL = URL(string: uri),
+               let value = attribute(named: "BYTERANGE", in: line),
+               let range = parseByteRange(value, previousEnd: nil),
+               range.offset >= 0 {
+                jobs.append(RangeJob(lineIndex: lineIndex,
+                                     sourceURL: sourceURL,
+                                     range: range,
+                                     preferredName: "init",
+                                     index: 0,
+                                     isInitialization: true))
                 continue
             }
 
             if line.hasPrefix("#EXT-X-BYTERANGE:") {
                 let value = String(line.dropFirst("#EXT-X-BYTERANGE:".count))
-                // We need the URI from the following line before an omitted offset can
-                // be resolved. Store the raw length/offset temporarily.
                 pendingByteRange = parseByteRange(value, previousEnd: nil)
-                // Do not copy this tag: each cached file contains only this range.
+                // The rewritten resource is a standalone local fragment, so the
+                // BYTERANGE tag itself is removed from the resulting playlist.
+                output[lineIndex] = ""
                 continue
             }
 
-            if line.isEmpty || line.hasPrefix("#") {
-                output.append(rawLine)
+            guard !line.isEmpty, !line.hasPrefix("#"),
+                  let sourceURL = URL(string: line),
+                  var range = pendingByteRange else {
                 continue
             }
 
-            guard let sourceURL = URL(string: line) else {
-                output.append(rawLine)
-                continue
-            }
-
-            var resolvedRange = pendingByteRange
-            if let range = pendingByteRange,
-               range.offset < 0,
-               let previousEnd = previousRangeEndByURL[sourceURL.absoluteString] {
-                resolvedRange = ByteRange(length: range.length, offset: previousEnd)
-            }
-
-            // parseByteRange uses -1 as the marker for an omitted offset.
-            if let range = resolvedRange, range.offset < 0 {
-                throw UPlayerError.assetLoadingFailed
+            if range.offset < 0 {
+                guard let previousEnd = previousRangeEndByURL[sourceURL.absoluteString] else {
+                    throw UPlayerError.assetLoadingFailed
+                }
+                range = ByteRange(length: range.length, offset: previousEnd)
             }
 
             segmentIndex += 1
-            let localURL = try await cache(resource: Resource(url: sourceURL,
-                                                              byteRange: resolvedRange),
-                                           preferredName: "segment",
-                                           index: segmentIndex,
-                                           directory: directory)
-            let playbackURL = cachedPlaybackURL(sourceURL: sourceURL, localURL: localURL, mode: "video-segment")
-            output.append(playbackURL.absoluteString)
-
-            if let range = resolvedRange {
-                previousRangeEndByURL[sourceURL.absoluteString] = range.offset + range.length
-            }
+            jobs.append(RangeJob(lineIndex: lineIndex,
+                                 sourceURL: sourceURL,
+                                 range: range,
+                                 preferredName: "segment",
+                                 index: segmentIndex,
+                                 isInitialization: false))
+            previousRangeEndByURL[sourceURL.absoluteString] = range.offset + range.length
             pendingByteRange = nil
         }
 
-        log("\(mediaCacheLogScope) cached playlist \(playlistKey), segments: \(segmentIndex)",
+        // Download every unique SegmentBase object exactly once. In the usual DASH
+        // SegmentBase case this is a single MP4 for the selected representation.
+        let uniqueURLs = Array(Dictionary(grouping: jobs, by: { $0.sourceURL.absoluteString })
+            .values
+            .compactMap { $0.first?.sourceURL })
+
+        var wholeResources = [String: Data]()
+        let limit = max(1, maximumConcurrentDownloads)
+        var offset = 0
+        while offset < uniqueURLs.count {
+            try checkCancellation()
+            let end = min(offset + limit, uniqueURLs.count)
+            let batch = Array(uniqueURLs[offset..<end])
+
+            let results = try await withThrowingTaskGroup(of: (String, Data).self) { group in
+                for sourceURL in batch {
+                    group.addTask { [weak self] in
+                        guard let self else { throw UPlayerError.nullReference }
+                        let data = try await self.downloadWholeResource(sourceURL)
+                        return (sourceURL.absoluteString, data)
+                    }
+                }
+
+                var values = [(String, Data)]()
+                values.reserveCapacity(batch.count)
+                for try await value in group { values.append(value) }
+                return values
+            }
+
+            for (key, data) in results { wholeResources[key] = data }
+            offset = end
+        }
+
+        for job in jobs {
+            try checkCancellation()
+            guard let wholeData = wholeResources[job.sourceURL.absoluteString] else {
+                throw UPlayerError.assetLoadingFailed
+            }
+
+            let start = Int(job.range.offset)
+            let end = start + Int(job.range.length)
+            guard start >= 0, end <= wholeData.count, start < end else {
+                throw UPlayerError.assetLoadingFailed
+            }
+
+            let payload = wholeData.subdata(in: start..<end)
+            let localURL = try store(payload: payload,
+                                     sourceURL: job.sourceURL,
+                                     byteRange: job.range,
+                                     preferredName: job.preferredName,
+                                     index: job.index,
+                                     directory: directory)
+            let playbackURL = cachedPlaybackURL(sourceURL: job.sourceURL,
+                                                localURL: localURL,
+                                                mode: job.isInitialization ? "video-init" : "video-segment")
+            if job.isInitialization {
+                output[job.lineIndex] = "#EXT-X-MAP:URI=\"\(playbackURL.absoluteString)\""
+            } else {
+                output[job.lineIndex] = playbackURL.absoluteString
+            }
+        }
+
+        log("\(mediaCacheLogScope) cached SegmentBase playlist \(playlistKey), segments: \(segmentIndex), whole source downloads: \(uniqueURLs.count)",
             loggingLevel: .debug)
 
-        return output.joined(separator: "\n")
+        return output.filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    func downloadWholeResource(_ sourceURL: URL) async throws -> Data {
+        try checkCancellation()
+        var request = URLRequest(url: sourceURL,
+                                 cachePolicy: .reloadIgnoringLocalCacheData,
+                                 timeoutInterval: 30)
+        requestHeaders.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        // Deliberately no Range header: SegmentBase is fetched as one complete object.
+        let (data, response) = try await session.data(for: request)
+        try checkCancellation()
+
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            throw UPlayerError.invalidHTTPResponse((response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+        guard !data.isEmpty else { throw UPlayerError.emptyDownload }
+
+        log("\(mediaCacheLogScope) downloaded whole resource \(sourceURL.absoluteString), bytes: \(data.count)",
+            loggingLevel: .debug)
+        return data
+    }
+
+    func store(payload: Data,
+               sourceURL: URL,
+               byteRange: ByteRange?,
+               preferredName: String,
+               index: Int,
+               directory: URL) throws -> URL {
+        let ext = sourceURL.pathExtension.isEmpty ? "mp4" : sourceURL.pathExtension
+        let rangeSuffix: String
+        if let byteRange {
+            rangeSuffix = "-\(byteRange.offset)-\(byteRange.length)"
+        } else {
+            rangeSuffix = ""
+        }
+
+        let filename = "\(preferredName)-\(index)-\(stableIdentifier(sourceURL.absoluteString))\(rangeSuffix).\(ext)"
+        let localURL = directory.appendingPathComponent(filename)
+
+        if fileManager.fileExists(atPath: localURL.path),
+           let values = try? localURL.resourceValues(forKeys: [.fileSizeKey]),
+           values.fileSize == payload.count {
+            return localURL
+        }
+
+        let temporaryURL = localURL.appendingPathExtension("tmp")
+        try? fileManager.removeItem(at: temporaryURL)
+        try payload.write(to: temporaryURL, options: .atomic)
+        try? fileManager.removeItem(at: localURL)
+        try fileManager.moveItem(at: temporaryURL, to: localURL)
+        return localURL
     }
 
     func cacheWholeSegmentPlaylist(_ playlist: String,

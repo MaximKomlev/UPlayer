@@ -136,9 +136,19 @@ class ViewController: UIViewController {
                                            url: URL(string: "https://localhost"),
                                            type: .preprocess),
 
-            SourceViewControllerModel.Item(title: "Prefetching Segment template MPD and Media",
-                                           subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
+            SourceViewControllerModel.Item(title: "Prefetch Segment template MPD and Media",
+                                           subtitle: "Prefetching bbb_with_multiple_tiled_thumbnails.mpd)",
+                                           url: URL(string: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_multiple_tiled_thumbnails.mpd"),
+                                           type: .prefetching),
+
+            SourceViewControllerModel.Item(title: "Prefetch Segment template MPD and Media",
+                                           subtitle: "Prefetching BigBuckBunny_15s_simple_2014_05_09.mpd)",
                                            url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_simple_2014_05_09.mpd"),
+                                           type: .prefetching),
+
+            SourceViewControllerModel.Item(title: "Prefetch Segment Base MPD and Media",
+                                           subtitle: "Prefetching BigBuckBunny_15s_onDemand_2014_05_09.mpd)",
+                                           url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_onDemand_2014_05_09.mpd"),
                                            type: .prefetching),
 
             SourceViewControllerModel.Item(title: "Download MPD",
@@ -147,12 +157,12 @@ class ViewController: UIViewController {
                                            type: .download),
 
             SourceViewControllerModel.Item(title: "Download Segment template MPD",
-                                           subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
+                                           subtitle: "Downloading BigBuckBunny_15s_simple_2014_05_09.mpd)",
                                            url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_simple_2014_05_09.mpd"),
                                            type: .download),
 
             SourceViewControllerModel.Item(title: "Download Segment base MPD",
-                                           subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
+                                           subtitle: "Downloading BigBuckBunny_15s_onDemand_2014_05_09.mpd)",
                                            url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_onDemand_2014_05_09.mpd"),
                                            type: .download),
 
@@ -264,6 +274,7 @@ class ViewController: UIViewController {
         let asset = UPlayerAsset(url: url)
         let sessionId = mpdPrefetchingProcessors.start(asset: asset)
     }
+    
     private func download(url: URL) {
         let asset = UPlayerAsset(url: url)
         let sessionId = mpdProcessors.start(asset: asset)
