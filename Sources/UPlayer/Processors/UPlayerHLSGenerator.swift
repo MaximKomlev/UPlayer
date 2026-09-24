@@ -21,23 +21,6 @@ private enum AudioTranscodeMode:
         "audio-transcode"
 }
 
-/// Video fragment/init URLs are, by default, written verbatim as literal
-/// `https://` URLs (never rewritten), so they never reach
-/// `UPlayerAVAssetResourceLoader` — AVPlayer fetches them directly from the
-/// CDN, bypassing any app-level caching/interception. Rewriting them to the
-/// `uplayer://` scheme (mirroring the existing audio-transcode rewrite)
-/// gives the resource loader a chance to serve a prefetched/cached copy
-/// instead of always hitting the network.
-private enum VideoURLMode:
-    String {
-
-    case initialization =
-        "video-init"
-
-    case media =
-        "video-segment"
-}
-
 public final class UPlayerHLSGenerator: UPlayerAssetProcessorProtocol {
 
     private let isRunningPrivate = SyncProperty(value: false)
@@ -300,16 +283,6 @@ private extension UPlayerHLSGenerator {
         
         let targetDuration = max(1, Int(ceil(totalDuration)))
         
-        let resolvedMediaURL: String
-        
-        if shouldTranscodeAudio(adaptation: adaptation, representation: representation) {
-            resolvedMediaURL = makeTranscodeURL(mediaURL.absoluteString, originalCodec: representation.codecs)
-        } else if isAudioRepresentation(adaptation: adaptation, representation: representation) {
-            resolvedMediaURL = mediaURL.absoluteString
-        } else {
-            resolvedMediaURL = makeVideoSegmentURL(mediaURL.absoluteString)
-        }
-        
         var playlist = ""
         playlist += "#EXTM3U\n"
         playlist += "#EXT-X-VERSION:7\n"
@@ -317,7 +290,7 @@ private extension UPlayerHLSGenerator {
         playlist += "#EXT-X-MEDIA-SEQUENCE:1\n"
         playlist += "#EXT-X-PLAYLIST-TYPE:VOD\n"
         playlist += "#EXTINF:\(String(format: "%.3f", totalDuration)),\n"
-        playlist += resolvedMediaURL + "\n"
+        playlist += mediaURL.absoluteString + "\n"
         playlist += "#EXT-X-ENDLIST\n"
         
         return playlist
@@ -694,17 +667,12 @@ private extension UPlayerHLSGenerator {
             resolved = media
         }
         
-        if shouldTranscodeAudio(adaptation: adaptation,
-                                representation: representation) {
-            return makeTranscodeURL(resolved, originalCodec: representation.codecs)
-        }
-        
-        guard !isAudioRepresentation(adaptation: adaptation,
-                                     representation: representation) else {
+        guard shouldTranscodeAudio(adaptation: adaptation,
+                                   representation: representation) else {
             return resolved
         }
         
-        return makeVideoSegmentURL(resolved)
+        return makeTranscodeURL(resolved, originalCodec: representation.codecs)
     }
     
     func buildInitURL(manifest: DASHManifest,
@@ -723,40 +691,26 @@ private extension UPlayerHLSGenerator {
         initialization = initialization.replacingOccurrences(of: "$Bandwidth$",
                                                              with: "\(representation.bandwidth)")
         
-        let resolved: String
-        
         if let absoluteURL = URL(string: initialization),
            absoluteURL.scheme != nil {
             
-            resolved = absoluteURL.absoluteString
-        } else {
-            
-            let base =
-            representation.baseURL ??
-            adaptation.baseURL ??
-            period.baseURL ??
-            manifest.baseURL
-            
-            if let base {
-                resolved = URL(string: initialization, relativeTo: base)?
-                    .absoluteURL
-                    .absoluteString
-                ?? initialization
-            } else {
-                resolved = initialization
-            }
+            return absoluteURL.absoluteString
         }
         
-        // Audio-transcode-needed init URLs are wrapped separately by the
-        // caller (`makeTranscodeInitURL`), and untranscoded audio (already
-        // AAC) doesn't need interception. Only video needs the new
-        // `video-init` rewrite here.
-        guard !isAudioRepresentation(adaptation: adaptation,
-                                     representation: representation) else {
-            return resolved
+        let base =
+        representation.baseURL ??
+        adaptation.baseURL ??
+        period.baseURL ??
+        manifest.baseURL
+        
+        guard let base else {
+            return initialization
         }
         
-        return makeVideoInitURL(resolved)
+        return URL(string: initialization, relativeTo: base)?
+            .absoluteURL
+            .absoluteString
+        ?? initialization
     }
     
     func buildRepresentationMediaURL(manifest: DASHManifest,
@@ -1069,34 +1023,6 @@ private extension UPlayerHLSGenerator {
             result += "&codec=\(codec)"
         }
 
-        return result
-    }
-    
-    /// Rewrites a literal `https://` video media-segment URL to the
-    /// `uplayer://` scheme with `mode=video-segment`, so it routes through
-    /// `UPlayerAVAssetResourceLoader` (and can be served from the fragment
-    /// cache) instead of AVPlayer fetching it directly.
-    func makeVideoSegmentURL(_ url: String) -> String {
-        makeVideoURL(url, mode: .media)
-    }
-    
-    /// Same as `makeVideoSegmentURL`, but for the `EXT-X-MAP` init segment.
-    func makeVideoInitURL(_ url: String) -> String {
-        makeVideoURL(url, mode: .initialization)
-    }
-    
-    private func makeVideoURL(_ url: String, mode: VideoURLMode) -> String {
-        
-        guard !url.isEmpty,
-              let schemeRange = url.range(of: "://") else {
-            return url
-        }
-        
-        var result = "uplayer://" + url[schemeRange.upperBound...]
-        let separator = result.contains("?") ? "&" : "?"
-        
-        result += "\(separator)mode=\(mode.rawValue)"
-        
         return result
     }
 }
