@@ -38,31 +38,36 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
     }
     
     public func resourceLoader(_ resourceLoader: AVAssetResourceLoader, shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
-        
+
         guard let url = loadingRequest.request.url else {
             loadingRequest.finishLoading(with: UPlayerError.assetLoadingFailed)
             return true
         }
-        
+
         log("\(logScope) request, \(url.absoluteString)", loggingLevel: .info)
-        
+
         switch requestMode(url) {
         case "audio-transcode-init":
-            handleAudioInitialization(
-                url: url,
-                loadingRequest: loadingRequest)
+            handleAudioInitialization(url: url,
+                                      loadingRequest: loadingRequest)
         case "audio-transcode":
-            handleAudioTranscode(
-                url: url,
-                loadingRequest: loadingRequest)
+            handleAudioTranscode(url: url,
+                                 loadingRequest: loadingRequest)
+
+        case "video-init", "video-segment":
+            handleCachedVideoFragment(url: url,
+                                      loadingRequest: loadingRequest)
         default:
-            handlePlaylist(url: url, loadingRequest: loadingRequest)
+            handlePlaylist(url: url,
+                           loadingRequest: loadingRequest)
         }
+
         return true
     }
     
     public func resourceLoader(_ resourceLoader: AVAssetResourceLoader, didCancel loadingRequest: AVAssetResourceLoadingRequest) {}
 }
+
 
 extension UPlayerAVAssetResourceLoader {
     fileprivate func requestMode(_ url: URL) -> String? {
@@ -76,8 +81,17 @@ extension UPlayerAVAssetResourceLoader {
             $0.name == "codec"
         }?.value
     }
+
+    fileprivate func cachedFileURL(from url: URL) -> URL? {
+        guard let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: {
+            $0.name == "cacheFile"
+        })?.value, !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: path)
+    }
     
-    private func originalHTTPURL(from url: URL) -> URL? {
+    fileprivate func originalHTTPURL(from url: URL) -> URL? {
         let original = url.absoluteString
         guard let schemeRange = original.range(of: "://") else {
             return nil
@@ -94,11 +108,49 @@ extension UPlayerAVAssetResourceLoader {
         
         let filteredQuery = rawQuery.split(separator: "&", omittingEmptySubsequences: false).filter { rawItem in
             let name = rawItem.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
-            return name != "mode" && name != "codec"
+            return name != "mode" && name != "codec" && name != "cacheFile"
         }.joined(separator: "&")
         
         let result = filteredQuery.isEmpty ? base : "\(base)?\(filteredQuery)"
         return URL(string: result)
+    }
+}
+
+extension UPlayerAVAssetResourceLoader {
+    fileprivate func handleCachedVideoFragment(url: URL, loadingRequest: AVAssetResourceLoadingRequest) {
+        Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                guard let realURL = originalHTTPURL(from: url),
+                      let localURL = cachedFileURL(from: url) else {
+                    throw UPlayerError.assetLoadingFailed
+                }
+
+                let data: Data
+                if FileManager.default.fileExists(atPath: localURL.path) {
+                    data = try Data(contentsOf: localURL, options: .mappedIfSafe)
+                    log("\(logScope) video cache hit, source: \(realURL.absoluteString), file: \(localURL.path), bytes: \(data.count)", loggingLevel: .debug)
+                } else {
+                    // Cache directories may be purged by the OS. Preserve playback by
+                    // falling back to the original network resource.
+                    log("\(logScope) cached video file missing, fallback to network: \(localURL.path)", loggingLevel: .debug)
+                    data = try await download(url: realURL)
+                }
+
+                guard !data.isEmpty else {
+                    throw UPlayerError.emptyDownload
+                }
+
+                respondRedirectedMedia(data: data,
+                                       realURL: realURL,
+                                       mimeType: "video/mp4",
+                                       loadingRequest: loadingRequest)
+            } catch {
+                log("\(logScope) cached video loading failed for \(url.absoluteString), \(error)", loggingLevel: .error)
+                loadingRequest.finishLoading(with: error)
+            }
+        }
     }
 }
 

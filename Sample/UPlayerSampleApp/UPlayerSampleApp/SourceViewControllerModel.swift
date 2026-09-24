@@ -12,6 +12,7 @@ public enum SourceViewControllerModelType {
     case play
     case preprocess
     case download
+    case prefetching
 }
 
 public struct SourceViewControllerModel {

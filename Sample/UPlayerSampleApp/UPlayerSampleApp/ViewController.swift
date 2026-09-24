@@ -19,6 +19,7 @@ class ViewController: UIViewController {
     private let preview = UIImageView()
     private let assetCache = UPlayerAssetCache()
     private let mpdProcessors = UPlayerAssetProcessorsQueue()
+    private let mpdPrefetchingProcessors = UPlayerAssetProcessorsQueue()
     private var downloadSessions = Set<UPlayerAssetProcessingID>()
 
     override func viewDidLoad() {
@@ -97,6 +98,15 @@ class ViewController: UIViewController {
         mpdProcessors.add(processor: UPlayerMPDToMP4Resolver(id: "MPDToMP4ResolverAssetProcessor"))
         mpdProcessors.add(processor: UPlayerHLSGenerator(id: "hlsGeneratorAssetProcessor"))
         mpdProcessors.delegate = self
+        
+        mpdPrefetchingProcessors.add(processor: UPlayerMetadataDownloader(id: "downloadAssetProcessor"))
+        mpdPrefetchingProcessors.add(processor: UPlayerMPDParser(id: "mpdParserAssetProcessor"))
+        mpdPrefetchingProcessors.add(processor: UPlayerThumbnailDownloader(id: "thumbnailDownloaderProcessor"))
+        mpdPrefetchingProcessors.add(processor: UPlayerSegmentBaseHLSGenerator(id: "hlsSegmentBaseAssetProcessor"))
+        mpdPrefetchingProcessors.add(processor: UPlayerMPDToMP4Resolver(id: "MPDToMP4ResolverAssetProcessor"))
+        mpdPrefetchingProcessors.add(processor: UPlayerHLSGenerator(id: "hlsGeneratorAssetProcessor"))
+        mpdPrefetchingProcessors.add(processor: UPlayerMediaCacher(id: "hlsMediaCacherProcessor"))
+        mpdPrefetchingProcessors.delegate = self
     }
             
     @objc private func rightNavBarButtonAction(sender: UIBarButtonItem) {
@@ -125,6 +135,11 @@ class ViewController: UIViewController {
                                            subtitle: "Preprocess five urls simultaneously",
                                            url: URL(string: "https://localhost"),
                                            type: .preprocess),
+
+            SourceViewControllerModel.Item(title: "Prefetching Segment template MPD and Media",
+                                           subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
+                                           url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_simple_2014_05_09.mpd"),
+                                           type: .prefetching),
 
             SourceViewControllerModel.Item(title: "Download MPD",
                                            subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
@@ -245,6 +260,10 @@ class ViewController: UIViewController {
         }
     }
     
+    private func preFetching(url: URL) {
+        let asset = UPlayerAsset(url: url)
+        let sessionId = mpdPrefetchingProcessors.start(asset: asset)
+    }
     private func download(url: URL) {
         let asset = UPlayerAsset(url: url)
         let sessionId = mpdProcessors.start(asset: asset)
@@ -373,6 +392,8 @@ extension ViewController: SourceViewControllerDelegate {
             preProcessing()
         case .download:
             download(url: url)
+        case .prefetching:
+            preFetching(url: url)
         }
     }
     
