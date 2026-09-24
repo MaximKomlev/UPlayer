@@ -107,62 +107,70 @@ public final class UPlayerAssetProcessorsQueue: UPlayerAssetProcessorsQueueProto
             $0.makeProcessor()
         }
 
-        let session = ProcessingSession(
-            id: processingID,
-            asset: asset,
-            processors: processors
-        )
+        let session = ProcessingSession(id: processingID,
+                                        asset: asset,
+                                        processors: processors)
 
         lock.lock()
         sessions[processingID] = session
         lock.unlock()
 
-        defer {
-            delegate?.didStartProcessing(source: self, sessionId: processingID)
-        }
-
         log("\(logScope) started, id: \(processingID), asset: \(asset.url)", loggingLevel: .debug)
 
-        let publisher = processors.reduce(
-            Just(asset)
-                .setFailureType(to: Error.self)
-                .eraseToAnyPublisher()) { chain, processor in
-
-            chain
-                .flatMap { asset -> AnyPublisher<UPlayerAssetProtocol, Error> in
-
-                    log("\(logScope) processing: \(asset.url), processor: \(processor.id), id: \(processingID)", loggingLevel: .debug)
-
-                    return processor.process(asset: asset)
-                }
-                .eraseToAnyPublisher()
-        }
-
-        session.cancellable = publisher.sink(receiveCompletion: { [weak self] completion in
-                guard let self else { return }
-
-                switch completion {
-
-                case .finished:
-                    log("\(logScope) succeed, id: \(processingID), asset: \(asset.url)", loggingLevel: .debug)
-
-                case .failure(let error):
-                    log("\(logScope) failed, id: \(processingID), asset: \(asset.url), error: \(error)", loggingLevel: .error)
-
-                    self.delegate?.didFinishProcessing(source: self, sessionId: processingID, error: error)
-                }
-
-                self.removeSession(id: processingID)
-            },
-
-            receiveValue: { [weak self] finalAsset in
-                guard let self else { return }
-
-                log("\(logScope) end, id: \(processingID), asset: \(finalAsset.url)", loggingLevel: .debug)
-
-                self.delegate?.didFinishProcessing(source: self, sessionId: processingID, asset: finalAsset)
+        DispatchQueue.main.async { [weak self, weak session] in
+            guard let self,
+                  let session else {
+                return
             }
-        )
+
+            // The caller's start() has already returned by the time
+            // this block executes.
+            self.delegate?.didStartProcessing(source: self,
+                                              sessionId: processingID)
+
+            let publisher = processors.reduce(
+                Just(asset)
+                    .setFailureType(to: Error.self)
+                    .eraseToAnyPublisher()
+            ) { chain, processor in
+                chain
+                    .flatMap { asset -> AnyPublisher<UPlayerAssetProtocol, Error> in
+                        log("\(logScope) processing: \(asset.url), processor: \(processor.id), id: \(processingID)", loggingLevel: .debug)
+                        return processor.process(asset: asset)
+                    }
+                    .eraseToAnyPublisher()
+            }
+            session.cancellable = publisher.sink(
+                receiveCompletion: { [weak self] completion in
+                    guard let self else {
+                        return
+                    }
+
+                    switch completion {
+                    case .finished:
+                        log("\(logScope) succeed, id: \(processingID), asset: \(asset.url)", loggingLevel: .debug)
+                    case .failure(let error):
+                        log("\(logScope) failed, id: \(processingID), asset: \(asset.url), error: \(error)", loggingLevel: .error)
+                        self.delegate?.didFinishProcessing(source: self,
+                                                           sessionId: processingID,
+                                                           error: error)
+                    }
+
+                    self.removeSession(id: processingID)
+                },
+                receiveValue: { [weak self] finalAsset in
+                    guard let self else {
+                        return
+                    }
+
+                    log("\(logScope) end, id: \(processingID), asset: \(finalAsset.url)", loggingLevel: .debug)
+
+                    self.delegate?.didFinishProcessing(source: self,
+                                                       sessionId: processingID,
+                                                       asset: finalAsset)
+                }
+            )
+        }
 
         return processingID
     }

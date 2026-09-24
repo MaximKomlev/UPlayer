@@ -19,7 +19,6 @@ class ViewController: UIViewController {
     private let preview = UIImageView()
     private let assetCache = UPlayerAssetCache()
     private let mpdProcessors = UPlayerAssetProcessorsQueue()
-    private let mpdDownloadProcessors = UPlayerAssetProcessorsQueue()
     private var downloadSessions = Set<UPlayerAssetProcessingID>()
 
     override func viewDidLoad() {
@@ -98,10 +97,6 @@ class ViewController: UIViewController {
         mpdProcessors.add(processor: UPlayerMPDToMP4Resolver(id: "MPDToMP4ResolverAssetProcessor"))
         mpdProcessors.add(processor: UPlayerHLSGenerator(id: "hlsGeneratorAssetProcessor"))
         mpdProcessors.delegate = self
-        
-        mpdDownloadProcessors.add(processor: UPlayerMetadataDownloader(id: "downloadAssetProcessor"))
-        mpdDownloadProcessors.add(processor: UPlayerMPDParser(id: "mpdParserAssetProcessor"))
-        mpdDownloadProcessors.delegate = self
     }
             
     @objc private func rightNavBarButtonAction(sender: UIBarButtonItem) {
@@ -131,9 +126,19 @@ class ViewController: UIViewController {
                                            url: URL(string: "https://localhost"),
                                            type: .preprocess),
 
-            SourceViewControllerModel.Item(title: "Download",
+            SourceViewControllerModel.Item(title: "Download MPD",
                                            subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
                                            url: URL(string: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_multiple_tiled_thumbnails.mpd"),
+                                           type: .download),
+
+            SourceViewControllerModel.Item(title: "Download HLS",
+                                           subtitle: "Downloading master.m3u8)",
+                                           url: URL(string: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8"),
+                                           type: .download),
+
+            SourceViewControllerModel.Item(title: "Download MP4",
+                                           subtitle: "Downloading bigbuck_bunny_8bit_15000kbps_1080p_60.0fps_h264.mp4)",
+                                           url: URL(string: "https://avtshare01.rz.tu-ilmenau.de/avt-vqdb-uhd-1/test_1/segments/bigbuck_bunny_8bit_15000kbps_1080p_60.0fps_h264.mp4"),
                                            type: .download),
 
             SourceViewControllerModel.Item(title: "Live",
@@ -232,7 +237,7 @@ class ViewController: UIViewController {
     
     private func download(url: URL) {
         let asset = UPlayerAsset(url: url)
-        let sessionId = mpdDownloadProcessors.start(asset: asset)
+        let sessionId = mpdProcessors.start(asset: asset)
         downloadSessions.insert(sessionId)
     }
     
@@ -327,11 +332,7 @@ extension ViewController: UPlayerAssetProcessorsQueueDelegate {
             exporter.progressHandler = { progress in
                 print("Export: \(Int(progress * 100))%")
             }
-            
-            let outputURL = FileManager.default
-                .temporaryDirectory
-                .appendingPathComponent("recording.mp4")
-            
+                        
             do {
                 try await exporter.exportToPhotoLibrary(asset: asset)
                 
