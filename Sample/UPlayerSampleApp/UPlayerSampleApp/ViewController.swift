@@ -131,6 +131,16 @@ class ViewController: UIViewController {
                                            url: URL(string: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_multiple_tiled_thumbnails.mpd"),
                                            type: .download),
 
+            SourceViewControllerModel.Item(title: "Download Segment template MPD",
+                                           subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
+                                           url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_simple_2014_05_09.mpd"),
+                                           type: .download),
+
+            SourceViewControllerModel.Item(title: "Download Segment base MPD",
+                                           subtitle: "Downloading bbb_with_multiple_tiled_thumbnails.mpd)",
+                                           url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_onDemand_2014_05_09.mpd"),
+                                           type: .download),
+
             SourceViewControllerModel.Item(title: "Download HLS",
                                            subtitle: "Downloading master.m3u8)",
                                            url: URL(string: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8"),
