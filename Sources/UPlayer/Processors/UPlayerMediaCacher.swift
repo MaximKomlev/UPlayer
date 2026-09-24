@@ -481,65 +481,63 @@ private extension UPlayerMediaCacher {
             pendingByteRange = nil
         }
 
-        // Download every unique SegmentBase object exactly once. In the usual DASH
-        // SegmentBase case this is a single MP4 for the selected representation.
-        let uniqueURLs = Array(Dictionary(grouping: jobs, by: { $0.sourceURL.absoluteString })
-            .values
-            .compactMap { $0.first?.sourceURL })
+        // Download and process one unique SegmentBase object at a time. The complete
+        // object is kept on disk instead of in Data so a large on-demand MP4 does
+        // not become part of the process resident memory. This deliberately remains
+        // a whole-object GET (no HTTP Range requests).
+        let jobsByURL = Dictionary(grouping: jobs, by: { $0.sourceURL.absoluteString })
+        let uniqueURLs = jobsByURL.values.compactMap { $0.first?.sourceURL }
 
-        var wholeResources = [String: Data]()
-        let limit = max(1, maximumConcurrentDownloads)
-        var offset = 0
-        while offset < uniqueURLs.count {
+        for sourceURL in uniqueURLs {
             try checkCancellation()
-            let end = min(offset + limit, uniqueURLs.count)
-            let batch = Array(uniqueURLs[offset..<end])
 
-            let results = try await withThrowingTaskGroup(of: (String, Data).self) { group in
-                for sourceURL in batch {
-                    group.addTask { [weak self] in
-                        guard let self else { throw UPlayerError.nullReference }
-                        let data = try await self.downloadWholeResource(sourceURL)
-                        return (sourceURL.absoluteString, data)
-                    }
+            let temporaryURL = try await downloadWholeResourceToTemporaryFile(sourceURL)
+            defer { try? fileManager.removeItem(at: temporaryURL) }
+
+            let handle = try FileHandle(forReadingFrom: temporaryURL)
+            defer { try? handle.close() }
+
+            let attributes = try fileManager.attributesOfItem(atPath: temporaryURL.path)
+            guard let fileSizeNumber = attributes[.size] as? NSNumber else {
+                throw UPlayerError.assetLoadingFailed
+            }
+            let fileSize = fileSizeNumber.int64Value
+
+            guard let sourceJobs = jobsByURL[sourceURL.absoluteString] else {
+                throw UPlayerError.assetLoadingFailed
+            }
+
+            for job in sourceJobs {
+                try checkCancellation()
+
+                guard job.range.offset >= 0,
+                      job.range.length > 0,
+                      job.range.offset <= fileSize,
+                      job.range.length <= fileSize - job.range.offset,
+                      job.range.length <= Int64(Int.max) else {
+                    throw UPlayerError.assetLoadingFailed
                 }
 
-                var values = [(String, Data)]()
-                values.reserveCapacity(batch.count)
-                for try await value in group { values.append(value) }
-                return values
-            }
+                try handle.seek(toOffset: UInt64(job.range.offset))
+                guard let payload = try handle.read(upToCount: Int(job.range.length)),
+                      payload.count == Int(job.range.length) else {
+                    throw UPlayerError.assetLoadingFailed
+                }
 
-            for (key, data) in results { wholeResources[key] = data }
-            offset = end
-        }
-
-        for job in jobs {
-            try checkCancellation()
-            guard let wholeData = wholeResources[job.sourceURL.absoluteString] else {
-                throw UPlayerError.assetLoadingFailed
-            }
-
-            let start = Int(job.range.offset)
-            let end = start + Int(job.range.length)
-            guard start >= 0, end <= wholeData.count, start < end else {
-                throw UPlayerError.assetLoadingFailed
-            }
-
-            let payload = wholeData.subdata(in: start..<end)
-            let localURL = try store(payload: payload,
-                                     sourceURL: job.sourceURL,
-                                     byteRange: job.range,
-                                     preferredName: job.preferredName,
-                                     index: job.index,
-                                     directory: directory)
-            let playbackURL = cachedPlaybackURL(sourceURL: job.sourceURL,
-                                                localURL: localURL,
-                                                mode: job.isInitialization ? "video-init" : "video-segment")
-            if job.isInitialization {
-                output[job.lineIndex] = "#EXT-X-MAP:URI=\"\(playbackURL.absoluteString)\""
-            } else {
-                output[job.lineIndex] = playbackURL.absoluteString
+                let localURL = try store(payload: payload,
+                                         sourceURL: job.sourceURL,
+                                         byteRange: job.range,
+                                         preferredName: job.preferredName,
+                                         index: job.index,
+                                         directory: directory)
+                let playbackURL = cachedPlaybackURL(sourceURL: job.sourceURL,
+                                                    localURL: localURL,
+                                                    mode: job.isInitialization ? "video-init" : "video-segment")
+                if job.isInitialization {
+                    output[job.lineIndex] = "#EXT-X-MAP:URI=\"\(playbackURL.absoluteString)\""
+                } else {
+                    output[job.lineIndex] = playbackURL.absoluteString
+                }
             }
         }
 
@@ -549,25 +547,50 @@ private extension UPlayerMediaCacher {
         return output.filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
-    func downloadWholeResource(_ sourceURL: URL) async throws -> Data {
+    func downloadWholeResourceToTemporaryFile(_ sourceURL: URL) async throws -> URL {
         try checkCancellation()
         var request = URLRequest(url: sourceURL,
                                  cachePolicy: .reloadIgnoringLocalCacheData,
                                  timeoutInterval: 30)
         requestHeaders.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+
         // Deliberately no Range header: SegmentBase is fetched as one complete object.
-        let (data, response) = try await session.data(for: request)
+        // URLSession writes the body to disk instead of accumulating it in Data.
+        let (downloadURL, response) = try await session.download(for: request)
         try checkCancellation()
 
         guard let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode) else {
             throw UPlayerError.invalidHTTPResponse((response as? HTTPURLResponse)?.statusCode ?? -1)
         }
-        guard !data.isEmpty else { throw UPlayerError.emptyDownload }
 
-        log("\(mediaCacheLogScope) downloaded whole resource \(sourceURL.absoluteString), bytes: \(data.count)",
+        let attributes = try fileManager.attributesOfItem(atPath: downloadURL.path)
+        guard let sizeNumber = attributes[.size] as? NSNumber,
+              sizeNumber.int64Value > 0 else {
+            throw UPlayerError.emptyDownload
+        }
+
+        // Move the URLSession-owned temporary file immediately to a location we own
+        // for the duration of range extraction. It is removed by the caller.
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("UPlayerSegmentBase", isDirectory: true)
+        try fileManager.createDirectory(at: temporaryDirectory,
+                                        withIntermediateDirectories: true)
+        let ownedURL = temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(sourceURL.pathExtension.isEmpty ? "mp4" : sourceURL.pathExtension)
+
+        do {
+            try fileManager.moveItem(at: downloadURL, to: ownedURL)
+        } catch {
+            // A move can fail across volumes/filesystems. Copy is safe here because
+            // it remains disk-to-disk and does not materialize the MP4 as Data.
+            try fileManager.copyItem(at: downloadURL, to: ownedURL)
+        }
+
+        log("\(mediaCacheLogScope) downloaded whole resource to temporary file \(sourceURL.absoluteString), bytes: \(sizeNumber.int64Value)",
             loggingLevel: .debug)
-        return data
+        return ownedURL
     }
 
     func store(payload: Data,
