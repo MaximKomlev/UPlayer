@@ -5,9 +5,9 @@
 //  Created by Max Komleu on 9/23/26.
 //
 
-//  Caches generated HLS video media locally and rewrites video resources to
-//  uplayer:// URLs. The resource loader serves cached bytes while preserving the
-//  original HTTP(S) media identity expected by AVFoundation.
+//  Prefetches generated HLS video and audio media locally and rewrites media
+//  resources to uplayer:// URLs. Transcoded audio keeps its original G711 bytes
+//  on disk; the resource loader consumes those bytes and transcodes to AAC on demand.
 //
 
 import Combine
@@ -35,7 +35,7 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
 
     public let id: String
 
-    /// Headers applied to video initialization/media requests.
+    /// Headers applied to video and audio initialization/media requests.
     public var requestHeaders = [String: String]()
 
     /// Cache only one video representation. When set, the highest-bandwidth
@@ -133,16 +133,36 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
                                                                     playlistKey: selectedVariant.key,
                                                                     directory: playlistDirectory)
 
-                    // Keep audio/thumbnail playlists untouched, but expose only the
-                    // selected cached video representation in the master playlist.
                     var updatedPlaylists = hlsMetadata.mediaPlaylists
                     updatedPlaylists[selectedVariant.key] = updated
+
+                    // Prefetch every external audio rendition referenced by the master.
+                    // For G711 playlists this stores the ORIGINAL G711 fMP4 bytes;
+                    // playback still performs the existing on-demand AAC transcoding.
+                    let audioKeys = self.audioPlaylistKeys(master: hlsMetadata.master,
+                                                           mediaPlaylists: hlsMetadata.mediaPlaylists)
+                    var cachedAudioPlaylists = 0
+                    for audioKey in audioKeys {
+                        try self.checkCancellation()
+                        guard let audioPlaylist = hlsMetadata.mediaPlaylists[audioKey] else { continue }
+
+                        let audioDirectory = assetDirectory
+                            .appendingPathComponent("audio-\(self.stableIdentifier(audioKey))", isDirectory: true)
+                        try self.fileManager.createDirectory(at: audioDirectory,
+                                                             withIntermediateDirectories: true)
+
+                        updatedPlaylists[audioKey] = try await self.cacheAudioPlaylist(audioPlaylist,
+                                                                                      playlistKey: audioKey,
+                                                                                      directory: audioDirectory)
+                        cachedAudioPlaylists += 1
+                    }
+
                     hlsMetadata.mediaPlaylists = updatedPlaylists
                     hlsMetadata.master = self.masterKeepingOnlySelectedVideo(master: hlsMetadata.master,
                                                                               selected: selectedVariant,
-                                                                              mediaPlaylists: hlsMetadata.mediaPlaylists)
+                                                                              mediaPlaylists: updatedPlaylists)
 
-                    log("\(mediaCacheLogScope) succeed, cached video playlists: 1/\(videoVariants.count), url: \(asset.url)",
+                    log("\(mediaCacheLogScope) succeed, cached video playlists: 1/\(videoVariants.count), cached audio playlists: \(cachedAudioPlaylists)/\(audioKeys.count), url: \(asset.url)",
                         loggingLevel: .debug)
                     promise(.success(asset))
                 } catch {
@@ -267,6 +287,21 @@ private extension UPlayerMediaCacher {
         return output.joined(separator: "\n")
     }
 
+    func audioPlaylistKeys(master: String,
+                           mediaPlaylists: [String: String]) -> [String] {
+        var result = [String]()
+        var seen = Set<String>()
+
+        for line in playlistLines(master) where line.hasPrefix("#EXT-X-MEDIA:") {
+            guard attribute(named: "TYPE", in: line)?.uppercased() == "AUDIO",
+                  let uri = attribute(named: "URI", in: line),
+                  let key = playlistKey(for: uri, mediaPlaylists: mediaPlaylists),
+                  seen.insert(key).inserted else { continue }
+            result.append(key)
+        }
+        return result
+    }
+
     func playlistKey(for uri: String,
                      mediaPlaylists: [String: String]) -> String? {
         if mediaPlaylists[uri] != nil { return uri }
@@ -283,6 +318,78 @@ private extension UPlayerMediaCacher {
 // MARK: - Media playlist caching
 
 private extension UPlayerMediaCacher {
+
+    func cacheAudioPlaylist(_ playlist: String,
+                            playlistKey: String,
+                            directory: URL) async throws -> String {
+        var output = playlist.components(separatedBy: .newlines)
+        var jobs = [(lineIndex: Int, sourceURL: URL, playbackURL: URL, preferredName: String, index: Int, mode: String)]()
+        var segmentIndex = 0
+
+        for lineIndex in output.indices {
+            try checkCancellation()
+            let line = output[lineIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if line.hasPrefix("#EXT-X-MAP:"),
+               let uri = attribute(named: "URI", in: line),
+               let playlistURL = URL(string: uri) {
+                // audio-transcode-init is generated locally by the transcoder and
+                // does not need the original G711 init bytes to produce AAC init.
+                if requestMode(playlistURL) == "audio-transcode-init" { continue }
+                guard let sourceURL = originalHTTPURL(from: playlistURL) else { continue }
+                jobs.append((lineIndex, sourceURL, playlistURL, "init", 0, "audio-init"))
+                continue
+            }
+
+            guard !line.isEmpty, !line.hasPrefix("#"), let playlistURL = URL(string: line) else { continue }
+            segmentIndex += 1
+            guard let sourceURL = originalHTTPURL(from: playlistURL) else { continue }
+            let mode = requestMode(playlistURL) == "audio-transcode" ? "audio-transcode" : "audio-segment"
+            jobs.append((lineIndex, sourceURL, playlistURL, "segment", segmentIndex, mode))
+        }
+
+        let limit = max(1, maximumConcurrentDownloads)
+        var offset = 0
+        while offset < jobs.count {
+            try checkCancellation()
+            let end = min(offset + limit, jobs.count)
+            let batch = Array(jobs[offset..<end])
+
+            let results = try await withThrowingTaskGroup(of: (Int, URL, URL, String, Bool).self) { group in
+                for job in batch {
+                    group.addTask { [weak self] in
+                        guard let self else { throw UPlayerError.nullReference }
+                        let localURL = try await self.cache(resource: Resource(url: job.sourceURL, byteRange: nil),
+                                                            preferredName: job.preferredName,
+                                                            index: job.index,
+                                                            directory: directory)
+                        let rewritten = self.audioCachedPlaybackURL(playlistURL: job.playbackURL,
+                                                                    sourceURL: job.sourceURL,
+                                                                    localURL: localURL,
+                                                                    mode: job.mode)
+                        return (job.lineIndex, rewritten, localURL, job.mode, job.preferredName == "init")
+                    }
+                }
+
+                var values = [(Int, URL, URL, String, Bool)]()
+                for try await value in group { values.append(value) }
+                return values
+            }
+
+            for (lineIndex, playbackURL, _, _, isInitialization) in results {
+                if isInitialization {
+                    output[lineIndex] = "#EXT-X-MAP:URI=\"\(playbackURL.absoluteString)\""
+                } else {
+                    output[lineIndex] = playbackURL.absoluteString
+                }
+            }
+            offset = end
+        }
+
+        log("\(mediaCacheLogScope) cached audio playlist \(playlistKey), segments: \(segmentIndex), prefetched resources: \(jobs.count), concurrent downloads: \(limit)",
+            loggingLevel: .debug)
+        return output.joined(separator: "\n")
+    }
 
     func cacheVideoPlaylist(_ playlist: String,
                             playlistKey: String,
@@ -643,6 +750,41 @@ private extension UPlayerMediaCacher {
 // MARK: - Cached playback URLs
 
 private extension UPlayerMediaCacher {
+
+    func requestMode(_ url: URL) -> String? {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first {
+            $0.name == "mode"
+        }?.value
+    }
+
+    func originalHTTPURL(from url: URL) -> URL? {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        if components.scheme == "uplayer" { components.scheme = "https" }
+        components.queryItems = (components.queryItems ?? []).filter {
+            $0.name != "mode" && $0.name != "codec" && $0.name != "cacheFile"
+        }
+        return components.url
+    }
+
+    func audioCachedPlaybackURL(playlistURL: URL,
+                                sourceURL: URL,
+                                localURL: URL,
+                                mode: String) -> URL {
+        // Preserve codec and all original query items from an existing
+        // audio-transcode URL; only attach cache transport metadata.
+        guard var components = URLComponents(url: playlistURL, resolvingAgainstBaseURL: false) else {
+            return cachedPlaybackURL(sourceURL: sourceURL, localURL: localURL, mode: mode)
+        }
+        components.scheme = "uplayer"
+        var items = components.queryItems ?? []
+        items.removeAll { $0.name == "cacheFile" }
+        if !items.contains(where: { $0.name == "mode" }) {
+            items.append(URLQueryItem(name: "mode", value: mode))
+        }
+        items.append(URLQueryItem(name: "cacheFile", value: localURL.path))
+        components.queryItems = items
+        return components.url ?? playlistURL
+    }
 
     /// Keep AVFoundation on the custom resource-loader path. The local file path
     /// is transport metadata only; the resource loader still reports the original

@@ -54,8 +54,8 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
             handleAudioTranscode(url: url,
                                  loadingRequest: loadingRequest)
 
-        case "video-init", "video-segment":
-            handleCachedVideoFragment(url: url,
+        case "video-init", "video-segment", "audio-init", "audio-segment":
+            handleCachedMediaFragment(url: url,
                                       loadingRequest: loadingRequest)
         default:
             handlePlaylist(url: url,
@@ -117,7 +117,7 @@ extension UPlayerAVAssetResourceLoader {
 }
 
 extension UPlayerAVAssetResourceLoader {
-    fileprivate func handleCachedVideoFragment(url: URL, loadingRequest: AVAssetResourceLoadingRequest) {
+    fileprivate func handleCachedMediaFragment(url: URL, loadingRequest: AVAssetResourceLoadingRequest) {
         Task { [weak self] in
             guard let self else { return }
 
@@ -130,11 +130,11 @@ extension UPlayerAVAssetResourceLoader {
                 let data: Data
                 if FileManager.default.fileExists(atPath: localURL.path) {
                     data = try Data(contentsOf: localURL, options: .mappedIfSafe)
-                    log("\(logScope) video cache hit, source: \(realURL.absoluteString), file: \(localURL.path), bytes: \(data.count)", loggingLevel: .debug)
+                    log("\(logScope) media cache hit, mode: \(requestMode(url) ?? "unknown"), source: \(realURL.absoluteString), file: \(localURL.path), bytes: \(data.count)", loggingLevel: .debug)
                 } else {
                     // Cache directories may be purged by the OS. Preserve playback by
                     // falling back to the original network resource.
-                    log("\(logScope) cached video file missing, fallback to network: \(localURL.path)", loggingLevel: .debug)
+                    log("\(logScope) cached media file missing, fallback to network: \(localURL.path)", loggingLevel: .debug)
                     data = try await download(url: realURL)
                 }
 
@@ -142,12 +142,13 @@ extension UPlayerAVAssetResourceLoader {
                     throw UPlayerError.emptyDownload
                 }
 
+                let mimeType = (requestMode(url)?.hasPrefix("audio-") == true) ? "audio/mp4" : "video/mp4"
                 respondRedirectedMedia(data: data,
                                        realURL: realURL,
-                                       mimeType: "video/mp4",
+                                       mimeType: mimeType,
                                        loadingRequest: loadingRequest)
             } catch {
-                log("\(logScope) cached video loading failed for \(url.absoluteString), \(error)", loggingLevel: .error)
+                log("\(logScope) cached media loading failed for \(url.absoluteString), \(error)", loggingLevel: .error)
                 loadingRequest.finishLoading(with: error)
             }
         }
@@ -239,7 +240,16 @@ extension UPlayerAVAssetResourceLoader {
                 log("\(logScope) transcoding request: \(url.absoluteString)", loggingLevel: .debug)
                 log("\(logScope) original HTTP URL: \(sourceURL.absoluteString)", loggingLevel: .debug)
                 
-                let sourceData = try await download(url: sourceURL)
+                let sourceData: Data
+                if let localURL = cachedFileURL(from: url),
+                   FileManager.default.fileExists(atPath: localURL.path) {
+                    sourceData = try Data(contentsOf: localURL, options: .mappedIfSafe)
+                    log("\(logScope) audio source cache hit, source: \(sourceURL.absoluteString), file: \(localURL.path), bytes: \(sourceData.count)",
+                        loggingLevel: .debug)
+                } else {
+                    sourceData = try await download(url: sourceURL)
+                }
+
                 let result = try await transcoder.transcodeAudioSegment(data: sourceData,
                                                                         initializationData: nil,
                                                                         originalCodec: codec,
