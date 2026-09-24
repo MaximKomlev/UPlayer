@@ -30,8 +30,10 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
     public weak var transcoderDelegate: UPlayerAVAssetResourceLoaderTranscodingDelegate?
     public var mediaRequestHeader: [String: Any]?
     private let transcodedCache = NSCache<NSString, NSData>()
+    private let fragmentCache: UPlayerFragmentCache
     
     override init() {
+        self.fragmentCache = .shared
         super.init()
         transcodedCache.countLimit = 64
         transcodedCache.totalCostLimit = 32 * 1024 * 1024
@@ -53,10 +55,9 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
         case "audio-transcode":
             handleAudioTranscode(url: url,
                                  loadingRequest: loadingRequest)
-
         case "video-init", "video-segment":
-            handleCachedVideoFragment(url: url,
-                                      loadingRequest: loadingRequest)
+            handleVideoFragment(url: url,
+                                loadingRequest: loadingRequest)
         default:
             handlePlaylist(url: url,
                            loadingRequest: loadingRequest)
@@ -71,15 +72,11 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
 
 extension UPlayerAVAssetResourceLoader {
     fileprivate func requestMode(_ url: URL) -> String? {
-        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first {
-            $0.name == "mode"
-        }?.value
+        UPlayerURLScheme.mode(of: url)
     }
     
     fileprivate func originalCodec(from url: URL) -> String? {
-        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first {
-            $0.name == "codec"
-        }?.value
+        UPlayerURLScheme.codec(from: url)
     }
 
     fileprivate func cachedFileURL(from url: URL) -> URL? {
@@ -299,6 +296,48 @@ extension UPlayerAVAssetResourceLoader {
             """,
             loggingLevel: .debug)
         return data
+    }
+}
+
+extension UPlayerAVAssetResourceLoader {
+    /// Serves video (or already-AAC audio) fragment/init requests from the
+    /// disk-backed `UPlayerFragmentCache` when a prefetched copy is
+    /// available, falling back to a network fetch (and populating the
+    /// cache for next time) on a miss. This is the actual interception
+    /// point that lets prefetching turn into a real performance win for
+    /// video, which previously had no way to be intercepted at all.
+    fileprivate func handleVideoFragment(url: URL, loadingRequest: AVAssetResourceLoadingRequest) {
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                guard let realURL = originalHTTPURL(from: url) else {
+                    throw UPlayerErrorsList.assetLoadingFailed
+                }
+
+                if let cached = fragmentCache.data(for: realURL) {
+                    log("\(logScope) video fragment cache hit \(realURL.absoluteString)", loggingLevel: .debug)
+                    respondRedirectedMedia(data: cached,
+                                           realURL: realURL,
+                                           mimeType: "video/mp4",
+                                           loadingRequest: loadingRequest)
+                    return
+                }
+
+                let data = try await download(url: realURL)
+                fragmentCache.store(data, for: realURL)
+
+                respondRedirectedMedia(data: data,
+                                       realURL: realURL,
+                                       mimeType: "video/mp4",
+                                       loadingRequest: loadingRequest)
+            } catch {
+                log("\(logScope) video fragment fetch for \(url.absoluteString) failed: \(error)", loggingLevel: .error)
+                loadingRequest.finishLoading(with: error)
+            }
+        }
     }
 }
 
