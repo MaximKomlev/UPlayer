@@ -49,7 +49,29 @@ public final class UPlayerAssetThumbnailData: UPlayerAssetThumbnailDataProtocol 
     }
 
     public func cue(for time: TimeInterval) -> DASHThumbnailCue? {
-        cues.first { $0.timeRange.contains(time) }
+        guard time.isFinite, !cues.isEmpty else {
+            return nil
+        }
+
+        // Cues are generated in chronological order. Binary search avoids a
+        // linear scan for every UISlider valueChanged event while scrubbing.
+        var lowerBound = 0
+        var upperBound = cues.count - 1
+
+        while lowerBound <= upperBound {
+            let index = lowerBound + (upperBound - lowerBound) / 2
+            let cue = cues[index]
+
+            if time < cue.timeRange.lowerBound {
+                upperBound = index - 1
+            } else if time >= cue.timeRange.upperBound {
+                lowerBound = index + 1
+            } else {
+                return cue
+            }
+        }
+
+        return nil
     }
 
     public func sprite(for cue: DASHThumbnailCue) -> UPlayerThumbnailSprite? {

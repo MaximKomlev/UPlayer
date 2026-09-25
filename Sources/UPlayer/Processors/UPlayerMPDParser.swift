@@ -563,7 +563,17 @@ private extension UPlayerMPDParser {
         let imageWidth = Int(repAttrs["width"] ?? "") ?? 0
         let imageHeight = Int(repAttrs["height"] ?? "") ?? 0
         let bandwidth = Int(repAttrs["bandwidth"] ?? "") ?? 0
-        let duration = TimeInterval(templateAttrs["duration"] ?? "") ?? 0
+        let timescale = Double(templateAttrs["timescale"] ?? "") ?? 1
+        let durationUnits = Double(templateAttrs["duration"] ?? "") ?? 0
+
+        guard timescale > 0 else {
+            return nil
+        }
+
+        // SegmentTemplate@duration is expressed in units of @timescale. Keep
+        // DASHThumbnailTrack.duration in seconds because the thumbnail
+        // downloader builds cue ranges in playback-time seconds.
+        let duration = durationUnits / timescale
         let startNumber = Int(templateAttrs["startNumber"] ?? "") ?? 1
 
         return DASHThumbnailTrack(

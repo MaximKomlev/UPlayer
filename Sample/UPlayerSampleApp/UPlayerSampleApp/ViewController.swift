@@ -124,8 +124,8 @@ class ViewController: UIViewController {
         [
             // MARK: - Preprocess
 
-            SourceViewControllerModel.Item(title: "Preprocessing",
-                                           subtitle: "Preprocess five urls simultaneously",
+            SourceViewControllerModel.Item(title: "Preprocessing MPD",
+                                           subtitle: "Preprocess five MPD urls simultaneously",
                                            url: URL(string: "https://localhost"),
                                            type: .preprocess),
 
@@ -169,63 +169,63 @@ class ViewController: UIViewController {
                                            url: URL(string: "https://avtshare01.rz.tu-ilmenau.de/avt-vqdb-uhd-1/test_1/segments/bigbuck_bunny_8bit_15000kbps_1080p_60.0fps_h264.mp4"),
                                            type: .download),
 
-            SourceViewControllerModel.Item(title: "Live",
+            SourceViewControllerModel.Item(title: "Play Live",
                                            subtitle: "DASH-IF LiveSim, 2-second segments",
                                            url: URL(string: "https://livesim.dashif.org/livesim/testpic_2s/Manifest.mpd")),
 
-            SourceViewControllerModel.Item(title: "MPD with preview",
+            SourceViewControllerModel.Item(title: "Play MPD with preview",
                                            subtitle: "MPEG-DASH with tiled thumbnail previews",
                                            url: URL(string: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_multiple_tiled_thumbnails.mpd")),
 
-            SourceViewControllerModel.Item(title: "Segment template MPD",
+            SourceViewControllerModel.Item(title: "Play Segment template MPD",
                                            subtitle: "Big Buck Bunny, SegmentTemplate profile",
                                            url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_simple_2014_05_09.mpd")),
 
-            SourceViewControllerModel.Item(title: "Segment base MPD",
+            SourceViewControllerModel.Item(title: "Play Segment base MPD",
                                            subtitle: "Big Buck Bunny, SegmentBase/on-demand profile",
                                            url: URL(string: "https://ftp.itec.aau.at/datasets/DASHDataset2014/BigBuckBunny/15sec/BigBuckBunny_15s_onDemand_2014_05_09.mpd")),
 
-            SourceViewControllerModel.Item(title: "Segment template MPD with Audio",
+            SourceViewControllerModel.Item(title: "Play Segment template MPD with Audio",
                                            subtitle: "Adaptation-set switching sample with audio",
                                            url: URL(string: "https://dash.akamaized.net/dash264/TestCasesIOP33/adapatationSetSwitching/5/manifest.mpd")),
 
-            SourceViewControllerModel.Item(title: "onDemand profile, Audio",
+            SourceViewControllerModel.Item(title: "Play onDemand profile, Audio",
                                            subtitle: "TelecomParisTech audio-only on-demand MPD",
                                            url: URL(string: "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-onDemand/mp4-onDemand-mpd-A.mpd")),
 
-            SourceViewControllerModel.Item(title: "onDemand profile, Video",
+            SourceViewControllerModel.Item(title: "Play onDemand profile, Video",
                                            subtitle: "TelecomParisTech video-only on-demand MPD",
                                            url: URL(string: "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-onDemand/mp4-onDemand-mpd-V.mpd")),
 
-            SourceViewControllerModel.Item(title: "onDemand profile, Audio + Video",
+            SourceViewControllerModel.Item(title: "Play onDemand profile, Audio + Video",
                                            subtitle: "TelecomParisTech A/V on-demand MPD",
                                            url: URL(string: "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-onDemand/mp4-onDemand-mpd-AV.mpd")),
 
-            SourceViewControllerModel.Item(title: "Full profile, without bitstream switching",
+            SourceViewControllerModel.Item(title: "Play Full profile, without bitstream switching",
                                            subtitle: "GDR stream without bitstream switching",
                                            url: URL(string: "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-full-gdr/mp4-full-gdr-mpd-AV-NBS.mpd")),
 
-            SourceViewControllerModel.Item(title: "Full profile, with bitstream switching",
+            SourceViewControllerModel.Item(title: "Play Full profile, with bitstream switching",
                                            subtitle: "GDR stream with bitstream switching",
                                            url: URL(string: "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-full-gdr/mp4-full-gdr-mpd-AV-BS.mpd")),
 
-            SourceViewControllerModel.Item(title: "Main profile, OGOP, without bitstream switching",
+            SourceViewControllerModel.Item(title: "Play Main profile, OGOP, without bitstream switching",
                                            subtitle: "Main profile OGOP without bitstream switching",
                                            url: URL(string: "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-main-ogop/mp4-main-ogop-mpd-AV-NBS.mpd")),
 
-            SourceViewControllerModel.Item(title: "Main profile, OGOP, with bitstream switching",
+            SourceViewControllerModel.Item(title: "Play Main profile, OGOP, with bitstream switching",
                                            subtitle: "Main profile OGOP with bitstream switching",
                                            url: URL(string: "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-main-ogop/mp4-main-ogop-mpd-AV-BS.mpd")),
 
-            SourceViewControllerModel.Item(title: "Live profile without bitstream switching",
+            SourceViewControllerModel.Item(title: "Play Live profile without bitstream switching",
                                            subtitle: "TelecomParisTech live profile",
                                            url: URL(string: "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-live/mp4-live-mpd-AV-NBS.mpd")),
 
-            SourceViewControllerModel.Item(title: "HLS",
+            SourceViewControllerModel.Item(title: "Play HLS",
                                            subtitle: "Apple fragmented MP4 HLS sample",
                                            url: URL(string: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8")),
 
-            SourceViewControllerModel.Item(title: "MP4",
+            SourceViewControllerModel.Item(title: "Play MP4",
                                            subtitle: "Big Buck Bunny H.264 MP4",
                                            url: URL(string: "https://avtshare01.rz.tu-ilmenau.de/avt-vqdb-uhd-1/test_1/segments/bigbuck_bunny_8bit_15000kbps_1080p_60.0fps_h264.mp4"))
         ]
