@@ -110,8 +110,7 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
                         return
                     }
 
-                    log("\(mediaCacheLogScope) selected video playlist \(selectedVariant.key), bandwidth: \(selectedVariant.bandwidth ?? -1), available video playlists: \(videoVariants.count)",
-                        loggingLevel: .debug)
+                    log("\(mediaCacheLogScope) selected video playlist \(selectedVariant.key), bandwidth: \(selectedVariant.bandwidth ?? -1), available video playlists: \(videoVariants.count)", loggingLevel: .debug)
 
                     let assetDirectory = self.cacheDirectory
                         .appendingPathComponent(self.stableIdentifier(asset.url.absoluteString),
@@ -162,12 +161,10 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
                                                                               selected: selectedVariant,
                                                                               mediaPlaylists: updatedPlaylists)
 
-                    log("\(mediaCacheLogScope) succeed, cached video playlists: 1/\(videoVariants.count), cached audio playlists: \(cachedAudioPlaylists)/\(audioKeys.count), url: \(asset.url)",
-                        loggingLevel: .debug)
+                    log("\(mediaCacheLogScope) succeed, cached video playlists: 1/\(videoVariants.count), cached audio playlists: \(cachedAudioPlaylists)/\(audioKeys.count), url: \(asset.url)", loggingLevel: .debug)
                     promise(.success(asset))
                 } catch {
-                    log("\(mediaCacheLogScope) failed, url: \(asset.url), error: \(error)",
-                        loggingLevel: .error)
+                    log("\(mediaCacheLogScope) failed, url: \(asset.url), error: \(error)", loggingLevel: .error)
                     promise(.failure(error))
                 }
             }
@@ -386,8 +383,7 @@ private extension UPlayerMediaCacher {
             offset = end
         }
 
-        log("\(mediaCacheLogScope) cached audio playlist \(playlistKey), segments: \(segmentIndex), prefetched resources: \(jobs.count), concurrent downloads: \(limit)",
-            loggingLevel: .debug)
+        log("\(mediaCacheLogScope) cached audio playlist \(playlistKey), segments: \(segmentIndex), prefetched resources: \(jobs.count), concurrent downloads: \(limit)", loggingLevel: .debug)
         return output.joined(separator: "\n")
     }
 
@@ -541,8 +537,7 @@ private extension UPlayerMediaCacher {
             }
         }
 
-        log("\(mediaCacheLogScope) cached SegmentBase playlist \(playlistKey), segments: \(segmentIndex), whole source downloads: \(uniqueURLs.count)",
-            loggingLevel: .debug)
+        log("\(mediaCacheLogScope) cached SegmentBase playlist \(playlistKey), segments: \(segmentIndex), whole source downloads: \(uniqueURLs.count)", loggingLevel: .debug)
 
         return output.filter { !$0.isEmpty }.joined(separator: "\n")
     }
@@ -588,8 +583,7 @@ private extension UPlayerMediaCacher {
             try fileManager.copyItem(at: downloadURL, to: ownedURL)
         }
 
-        log("\(mediaCacheLogScope) downloaded whole resource to temporary file \(sourceURL.absoluteString), bytes: \(sizeNumber.int64Value)",
-            loggingLevel: .debug)
+        log("\(mediaCacheLogScope) downloaded whole resource to temporary file \(sourceURL.absoluteString), bytes: \(sizeNumber.int64Value)", loggingLevel: .debug)
         return ownedURL
     }
 
@@ -692,8 +686,7 @@ private extension UPlayerMediaCacher {
             offset = end
         }
 
-        log("\(mediaCacheLogScope) cached playlist \(playlistKey), segments: \(segmentIndex), concurrent downloads: \(limit)",
-            loggingLevel: .debug)
+        log("\(mediaCacheLogScope) cached playlist \(playlistKey), segments: \(segmentIndex), concurrent downloads: \(limit)", loggingLevel: .debug)
         return output.joined(separator: "\n")
     }
 
