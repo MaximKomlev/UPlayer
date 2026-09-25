@@ -30,6 +30,11 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
     public weak var transcoderDelegate: UPlayerAVAssetResourceLoaderTranscodingDelegate?
     public var mediaRequestHeader: [String: Any]?
     private let transcodedCache = NSCache<NSString, NSData>()
+    private lazy var persistentMediaCacheManager: UPlayerMediaCacheManager? = {
+        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("UPlayerMediaCache", isDirectory: true) else { return nil }
+        return UPlayerMediaCacheManager(rootDirectory: root)
+    }()
     
     override init() {
         super.init()
@@ -130,6 +135,7 @@ extension UPlayerAVAssetResourceLoader {
                 let data: Data
                 if FileManager.default.fileExists(atPath: localURL.path) {
                     data = try Data(contentsOf: localURL, options: .mappedIfSafe)
+                    persistentMediaCacheManager?.touch(fileURL: localURL)
                     log("\(logScope) media cache hit, mode: \(requestMode(url) ?? "unknown"), source: \(realURL.absoluteString), file: \(localURL.path), bytes: \(data.count)", loggingLevel: .debug)
                 } else {
                     // Cache directories may be purged by the OS. Preserve playback by
@@ -244,6 +250,7 @@ extension UPlayerAVAssetResourceLoader {
                 if let localURL = cachedFileURL(from: url),
                    FileManager.default.fileExists(atPath: localURL.path) {
                     sourceData = try Data(contentsOf: localURL, options: .mappedIfSafe)
+                    persistentMediaCacheManager?.touch(fileURL: localURL)
                     log("\(logScope) audio source cache hit, source: \(sourceURL.absoluteString), file: \(localURL.path), bytes: \(sourceData.count)",
                         loggingLevel: .debug)
                 } else {

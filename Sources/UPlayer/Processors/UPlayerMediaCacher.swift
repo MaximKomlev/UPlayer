@@ -49,6 +49,14 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
     /// EXT-X-BYTERANGE offsets depend on the previous range.
     public var maximumConcurrentDownloads: Int = 6
 
+    /// Remove an asset after this much time without a cache hit. `nil` disables
+    /// age-based eviction. Defaults to 24 hours.
+    public var cacheExpirationInterval: TimeInterval? = 24 * 60 * 60
+
+    /// Maximum size of UPlayerMediaCache. Least-recently-used assets are removed
+    /// when this limit is exceeded. `nil` disables size-based eviction.
+    public var maximumCacheSize: Int64? = 2 * 1024 * 1024 * 1024
+
     /// Root directory used by the cache. Each asset gets its own deterministic subdirectory.
     public let cacheDirectory: URL
 
@@ -115,9 +123,18 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
                     let assetDirectory = self.cacheDirectory
                         .appendingPathComponent(self.stableIdentifier(asset.url.absoluteString),
                                                 isDirectory: true)
+                    let cacheManager = UPlayerMediaCacheManager(rootDirectory: self.cacheDirectory,
+                                                                fileManager: self.fileManager)
+
+                    // Reclaim stale/LRU assets before consuming more user storage.
+                    cacheManager.cleanupTemporarySegmentBaseFiles()
+                    cacheManager.cleanup(expirationInterval: self.cacheExpirationInterval,
+                                         maximumSize: self.maximumCacheSize,
+                                         excluding: assetDirectory)
 
                     try self.fileManager.createDirectory(at: assetDirectory,
                                                          withIntermediateDirectories: true)
+                    try cacheManager.register(assetURL: asset.url, directory: assetDirectory)
 
                     guard let playlist = hlsMetadata.mediaPlaylists[selectedVariant.key] else {
                         throw UPlayerError.assetLoadingFailed
@@ -161,6 +178,13 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
                                                                               selected: selectedVariant,
                                                                               mediaPlaylists: updatedPlaylists)
 
+                    // Refresh access metadata after a successful prefetch, then enforce
+                    // the global limit again now that the incoming asset size is known.
+                    try cacheManager.register(assetURL: asset.url, directory: assetDirectory)
+                    cacheManager.cleanup(expirationInterval: self.cacheExpirationInterval,
+                                         maximumSize: self.maximumCacheSize,
+                                         excluding: assetDirectory)
+
                     log("\(mediaCacheLogScope) succeed, cached video playlists: 1/\(videoVariants.count), cached audio playlists: \(cachedAudioPlaylists)/\(audioKeys.count), url: \(asset.url)", loggingLevel: .debug)
                     promise(.success(asset))
                 } catch {
@@ -188,6 +212,8 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
         processor.requestHeaders = requestHeaders
         processor.maximumVideoBandwidth = maximumVideoBandwidth
         processor.maximumConcurrentDownloads = maximumConcurrentDownloads
+        processor.cacheExpirationInterval = cacheExpirationInterval
+        processor.maximumCacheSize = maximumCacheSize
         return processor
     }
 }
