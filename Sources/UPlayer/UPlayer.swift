@@ -257,6 +257,7 @@ public class UPlayer: UPlayerProtocol {
     
     // MARK: Fields
     
+    private let manageAudioSession: Bool
     private let observer = AVPlayerObserver()
     private lazy var playerInstance: AVPlayer = {
         let player = AVPlayer()
@@ -280,7 +281,9 @@ public class UPlayer: UPlayerProtocol {
     
     // MARK: Constructors/Destructor
     
-    public init() {}
+    public init(manageAudioSession: Bool = false) {
+        self.manageAudioSession = manageAudioSession
+    }
     
     // MARK: UPlayerProtocol
         
@@ -338,13 +341,7 @@ public class UPlayer: UPlayerProtocol {
         get {
             return avPlayer.isMuted
         } set {
-            if avPlayer.isMuted == newValue {
-                return
-            }
             avPlayer.isMuted = newValue
-            DispatchQueue.main.async {
-                self.delegate?.didEventPlayerChange(source: self, isMuted: newValue)
-            }
         }
     }
     
@@ -394,6 +391,8 @@ public class UPlayer: UPlayerProtocol {
     }
     
     public func play(url: URL) {
+        initializeAudioSession()
+        
         stop()
 
         delegate?.playerView?.showPlaceholder()
@@ -505,6 +504,52 @@ public class UPlayer: UPlayerProtocol {
     }
     
     // MARK: Helpers
+
+    private func initializeAudioSession() {
+        guard manageAudioSession else {
+            return
+        }
+        
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                log("\(logScope) update audio session failed \(error)", loggingLevel: .info)
+            }
+        }
+    }
+
+    private func updateAudioSession(isMuted: Bool) {
+        guard manageAudioSession else {
+            delegate?.didEventPlayerChange(source: self,
+                                                isMuted: isMuted)
+            return
+        }
+
+        DispatchQueue.global(qos: .utility).async {
+            if isMuted {
+                do {
+                    try AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
+                    try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                } catch {
+                    log("\(logScope) update audio session failed \(error)", loggingLevel: .info)
+                }
+            } else {
+                do {
+                    try AVAudioSession.sharedInstance().setCategory(.playback, options: [])
+                    try AVAudioSession.sharedInstance().setActive(true)
+                } catch {
+                    log("\(logScope) update audio session failed \(error)", loggingLevel: .info)
+                }
+            }
+            
+            DispatchQueue.main.sync { [self] in
+                self.delegate?.didEventPlayerChange(source: self,
+                                                    isMuted: isMuted)
+            }
+        }
+    }
     
     private func startPlayback(asset: UPlayerAssetProtocol) {
         log("\(logScope) ready to play", loggingLevel: .debug)
@@ -662,6 +707,10 @@ extension UPlayer: UPlayerAssetProcessorsQueueDelegate {
 }
 
 extension UPlayer: AVPlayerObserverDelegate {
+    func player(_ player: AVPlayer, didChangeMute isMuted: Bool) {
+        updateAudioSession(isMuted: isMuted)
+    }
+    
     func player(_ player: AVPlayer, didChangeState state: UPlayerPlayerState) {
         DispatchQueue.main.async {
             self.state = state

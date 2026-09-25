@@ -16,6 +16,7 @@ internal protocol AVPlayerObserverDelegate: AnyObject {
     func player(_ player: AVPlayer, didChangeDuration duration: TimeInterval)
     func player(_ player: AVPlayer, didChangeResolution resolution: CGSize)
     func player(_ player: AVPlayer, didChangeRate rate: Double)
+    func player(_ player: AVPlayer, didChangeMute state: Bool)
 }
 
 internal final class AVPlayerObserver: NSObject {
@@ -32,6 +33,7 @@ internal final class AVPlayerObserver: NSObject {
     private var playerErrorObservation: NSKeyValueObservation?
     private var playerTimeControlObservation: NSKeyValueObservation?
     private var playerCurrentItemObservation: NSKeyValueObservation?
+    private var muteObservation: NSKeyValueObservation?
 
     private var periodicTimeObserver: Any?
 
@@ -94,6 +96,18 @@ internal final class AVPlayerObserver: NSObject {
                 log("\(logScope) currentItem is nil", loggingLevel: .info)
                 self.clearItemObservers()
             }
+        }
+
+        muteObservation = player.observe(\.isMuted, options: [.new]) { [weak self] player, change in
+            guard let isMuted = change.newValue else {
+                return
+            }
+            
+            guard let self else {
+                return
+            }
+            
+            self.delegate?.player(player, didChangeMute: isMuted)
         }
 
         // Periodic current time observer
@@ -277,6 +291,7 @@ internal final class AVPlayerObserver: NSObject {
         playerErrorObservation = nil
         playerTimeControlObservation = nil
         playerCurrentItemObservation = nil
+        muteObservation = nil
     }
 
     static func printFullError(_ error: Error, prefix: String) {

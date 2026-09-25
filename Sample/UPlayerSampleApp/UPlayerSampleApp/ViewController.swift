@@ -13,7 +13,7 @@ import AVFoundation
 class ViewController: UIViewController {
     
     private let playerViewController = AVPlayerViewController()
-    private let player = UPlayer()
+    private let player = UPlayer(manageAudioSession: true)
     private let customScrubber = UISlider()
     private var isScrubbing: Bool = false
     private let preview = UIImageView()
@@ -29,13 +29,6 @@ class ViewController: UIViewController {
                 
         let rightBarButtonItem = UIBarButtonItem(title: "Video List", style: .plain, target: self, action: #selector(rightNavBarButtonAction))
         navigationItem.rightBarButtonItem = rightBarButtonItem
-
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("Audio session error: \(error)")
-        }
         
         preview.backgroundColor = .clear
         preview.contentMode = .scaleAspectFit
@@ -272,7 +265,7 @@ class ViewController: UIViewController {
     
     private func preFetching(url: URL) {
         let asset = UPlayerAsset(url: url)
-        let sessionId = mpdPrefetchingProcessors.start(asset: asset)
+        mpdPrefetchingProcessors.start(asset: asset)
     }
     
     private func download(url: URL) {
