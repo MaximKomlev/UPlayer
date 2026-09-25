@@ -31,9 +31,7 @@ internal final class UPlayerAVAssetResourceLoader: NSObject, UPlayerAVAssetResou
     public var mediaRequestHeader: [String: Any]?
     private let transcodedCache = NSCache<NSString, NSData>()
     private lazy var persistentMediaCacheManager: UPlayerMediaCacheManager? = {
-        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("UPlayerMediaCache", isDirectory: true) else { return nil }
-        return UPlayerMediaCacheManager(rootDirectory: root)
+        return UPlayerMediaCacheManager(rootDirectory: commonCacheDirectory)
     }()
     
     override init() {

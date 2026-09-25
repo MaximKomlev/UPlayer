@@ -25,6 +25,15 @@ private struct Resource {
     let byteRange: ByteRange?
 }
 
+internal var commonCacheDirectory: URL {
+    guard let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("UPlayerMediaCache", isDirectory: true) else {
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent("UPlayerMediaCache", isDirectory: true)
+    }
+    
+    return dir
+}
+
 public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
 
     private let isRunningPrivate = SyncProperty(value: false)
@@ -61,10 +70,7 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
     public let cacheDirectory: URL
 
     public required convenience init(id: String) {
-        let directory = FileManager.default.urls(for: .cachesDirectory,
-                                                 in: .userDomainMask).first!
-            .appendingPathComponent("UPlayerMediaCache", isDirectory: true)
-        self.init(id: id, cacheDirectory: directory)
+        self.init(id: id, cacheDirectory: commonCacheDirectory)
     }
 
     public init(id: String,
@@ -120,8 +126,7 @@ public final class UPlayerMediaCacher: UPlayerAssetProcessorProtocol {
 
                     log("\(mediaCacheLogScope) selected video playlist \(selectedVariant.key), bandwidth: \(selectedVariant.bandwidth ?? -1), available video playlists: \(videoVariants.count)", loggingLevel: .debug)
 
-                    let assetDirectory = self.cacheDirectory
-                        .appendingPathComponent(self.stableIdentifier(asset.url.absoluteString),
+                    let assetDirectory = self.cacheDirectory.appendingPathComponent(self.stableIdentifier(asset.url.absoluteString),
                                                 isDirectory: true)
                     let cacheManager = UPlayerMediaCacheManager(rootDirectory: self.cacheDirectory,
                                                                 fileManager: self.fileManager)
