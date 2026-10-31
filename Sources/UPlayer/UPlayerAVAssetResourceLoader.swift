@@ -193,8 +193,7 @@ extension UPlayerAVAssetResourceLoader {
                     throw UPlayerError.aacEncodongFailed7
                 }
                 
-                log("\(logScope) AAC init generated codec=\(codec ?? "unknown") bytes=\(result.data.count) format=\(result.format) contentType=\(result.contentType)",
-                    loggingLevel: .debug)
+                log("\(logScope) AAC init generated codec=\(codec ?? "unknown") bytes=\(result.data.count) format=\(result.format) contentType=\(result.contentType)", loggingLevel: .debug)
                 
                 dumpTopLevelMP4Boxes(result.data, prefix: "AAC init")
                 
