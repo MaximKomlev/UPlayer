@@ -205,7 +205,8 @@ extension UPlayerAVAssetResourceLoader {
                                        mimeType: "audio/mp4",
                                        loadingRequest: loadingRequest)
             } catch {
-                log("\(logScope) init transcoding failed: \(error)", loggingLevel: .error) loadingRequest.finishLoading(with: error)
+                log("\(logScope) init transcoding failed: \(error)", loggingLevel: .error)
+                loadingRequest.finishLoading(with: error)
             }
         }
     }
